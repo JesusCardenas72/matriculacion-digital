@@ -1,0 +1,305 @@
+import React from 'react';
+import { Document, Page, View, Text, Image, StyleSheet } from '@react-pdf/renderer';
+import { EnrollmentFormData } from './types';
+import logoCpm from './assets/logo_cpm.png';
+import logoJccm from './assets/logo_jccm.png';
+
+export interface PendingSubject { id: string; materiaId: string; label: string; }
+export interface CurrentSubject { MATERIA: string; DESCRIPCION: string; }
+
+export type CalcResult = {
+  details: {
+    reductionLabel: string;
+    serviciosGenerales: number;
+    aperturaExpediente: number;
+    curso: number;
+    asignaturasPendientes: number;
+    matriculaHonorDiscount: number;
+    multiplier: number;
+  };
+} | null;
+
+export interface MatriculaPdfProps {
+  formData: EnrollmentFormData;
+  academicYear: string;
+  submitTimestamp: Date;
+  asignaturasCursoActual: CurrentSubject[];
+  selectedPendingSubjects: PendingSubject[];
+  calculation: CalcResult;
+}
+
+const C = {
+  bg: '#F5F5F5', white: '#FFFFFF',
+  gray50: '#F9FAFB', gray100: '#F3F4F6', gray200: '#E5E7EB',
+  gray400: '#9CA3AF', gray500: '#6B7280', gray700: '#374151',
+  gray800: '#1F2937', gray900: '#111827',
+  blue50: '#EFF6FF', blue200: '#BFDBFE', blue800: '#1E40AF',
+  orange50: '#FFF7ED', orange200: '#FED7AA', orange800: '#92400E',
+  green100: '#DCFCE7', green700: '#15803D',
+  blue700: '#1D4ED8',
+};
+
+const s = StyleSheet.create({
+  page: { backgroundColor: C.bg, padding: 20, fontSize: 9, color: C.gray900, fontFamily: 'Helvetica' },
+  card: { backgroundColor: C.white, borderRadius: 8, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: C.gray100, borderStyle: 'solid' },
+  sectionTitle: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.gray500, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: C.gray100, borderBottomStyle: 'solid' },
+  row: { flexDirection: 'row', gap: 6, marginBottom: 4 },
+  fieldLabel: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray400, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 1.5 },
+  fieldValue: { fontSize: 9, fontFamily: 'Helvetica', color: C.gray800, backgroundColor: C.gray50, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 4 },
+  fieldValueHighlight: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.gray800, backgroundColor: C.gray50, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 4 },
+  dotFilled: { width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: C.gray900, borderStyle: 'solid', backgroundColor: C.gray900 },
+  dotEmpty:  { width: 8, height: 8, borderRadius: 4, borderWidth: 1.5, borderColor: C.gray500, borderStyle: 'solid' },
+  boxFilled: { width: 8, height: 8, borderRadius: 2, borderWidth: 1.5, borderColor: C.gray900, borderStyle: 'solid', backgroundColor: C.gray900 },
+  boxEmpty:  { width: 8, height: 8, borderRadius: 2, borderWidth: 1.5, borderColor: C.gray500, borderStyle: 'solid' },
+  labelSmall: { fontSize: 7.5, color: C.gray700, fontFamily: 'Helvetica' },
+  labelMicro: { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray400, textTransform: 'uppercase', letterSpacing: 0.4 },
+});
+
+const Field = ({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) => (
+  <View>
+    <Text style={s.fieldLabel}>{label}</Text>
+    <Text style={highlight ? s.fieldValueHighlight : s.fieldValue}>{value || '—'}</Text>
+  </View>
+);
+
+const Radio = ({ label, checked }: { label: string; checked: boolean }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+    <View style={checked ? s.dotFilled : s.dotEmpty} />
+    <Text style={{ fontSize: 9, fontFamily: checked ? 'Helvetica-Bold' : 'Helvetica', color: checked ? C.gray900 : C.gray400 }}>{label}</Text>
+  </View>
+);
+
+const DesgloseRow = ({ label, value, highlight, discount }: { label: string; value: string; highlight?: boolean; discount?: boolean }) => (
+  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2.5, gap: 4 }}>
+    <Text style={{ flex: 1, fontSize: 8, color: discount ? C.green700 : C.gray500, fontFamily: discount || highlight ? 'Helvetica-Bold' : 'Helvetica' }}>{label}</Text>
+    <Text style={{ flexShrink: 0, fontSize: 8, fontFamily: 'Helvetica-Bold', color: discount ? C.green700 : C.gray800 }}>{value}</Text>
+  </View>
+);
+
+export const MatriculaPdf = ({ formData, academicYear, submitTimestamp, asignaturasCursoActual, selectedPendingSubjects, calculation }: MatriculaPdfProps) => {
+  const fechaFmt = formData.fechaNacimiento ? new Date(formData.fechaNacimiento + 'T12:00:00').toLocaleDateString('es-ES') : '';
+
+  const perfilLabel =
+    formData.perfilProfesional === 'A' ? 'Fundamentos de Composicion'
+    : formData.perfilProfesional === 'B' ? (formData.curso.includes('5') ? 'Improvisacion / Informatica Musical' : 'Didactica musical / Improvisacion')
+    : formData.perfilProfesional === 'C' ? (formData.curso.includes('5') ? 'Improvisacion / Coro 1' : 'Musica moderna / Coro 2')
+    : '';
+
+  const showPerfil = !!formData.perfilProfesional && (formData.curso.includes('5') || formData.curso.includes('6')) && formData.tipoEnsenanza === 'profesional';
+  const d = calculation?.details;
+
+  return (
+    <Document>
+      <Page size="A4" style={s.page}>
+
+
+        {/* ── Header ── */}
+        <View style={{ ...s.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: 10 }}>
+          <Image src={logoJccm} style={{ height: 30 }} />
+          <View style={{ alignItems: 'center' }}>
+            <Text style={{ fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.gray900 }}>Solicitud de Matricula</Text>
+            <Text style={{ fontSize: 9, color: C.gray500, marginTop: 1 }}>Curso Academico {academicYear}</Text>
+            <Text style={{ fontSize: 8, color: C.gray400 }}>C.P.M. "Marcos Redondo", Ciudad Real</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end', gap: 4 }}>
+            <Image src={logoCpm} style={{ height: 30 }} />
+            <View style={{ backgroundColor: '#F97316', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 }}>
+              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                Enviado: {submitTimestamp.toLocaleDateString('es-ES')}{' '}
+                {submitTimestamp.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Fila 1: Datos Personales (izq) + Forma de Pago (der) ── */}
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+
+          {/* Columna izquierda */}
+          <View style={{ flex: 3 }}>
+
+            {/* Datos Personales */}
+            <View style={s.card}>
+              <Text style={s.sectionTitle}>Datos Personales</Text>
+              <View style={s.row}>
+                <View style={{ flex: 1 }}><Field label="Nombre" value={formData.nombre} /></View>
+                <View style={{ flex: 1.4 }}><Field label="Apellidos" value={formData.apellidos} /></View>
+              </View>
+              <View style={s.row}>
+                <View style={{ flex: 1 }}><Field label="D.N.I. / N.I.E." value={formData.dni} /></View>
+                <View style={{ flex: 1 }}><Field label="Fecha de nac." value={fechaFmt} /></View>
+                <View style={{ flex: 1.8 }}><Field label="Domicilio actual" value={formData.domicilio} /></View>
+              </View>
+              <View style={s.row}>
+                <View style={{ flex: 1.8 }}><Field label="Localidad" value={formData.localidad} /></View>
+                <View style={{ flex: 1 }}><Field label="Provincia" value={formData.provincia} /></View>
+                <View style={{ flex: 0.8 }}><Field label="C.P." value={formData.codigoPostal} /></View>
+              </View>
+              <View style={{ ...s.row, marginBottom: 0 }}>
+                <View style={{ flex: 1.8 }}><Field label="Correo electronico" value={formData.email} /></View>
+                <View style={{ flex: 1 }}><Field label="Telefono" value={formData.telefono} /></View>
+              </View>
+              <View style={{ marginTop: 6, paddingTop: 5, borderTopWidth: 1, borderTopColor: C.gray100, borderTopStyle: 'solid', flexDirection: 'row', gap: 14, flexWrap: 'wrap' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={s.labelMicro}>Hora salida</Text>
+                  {(['<17 h', '17 h', '18 h'] as const).map(h => (
+                    <View key={h} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <View style={(formData.horaSalidaEstudios === h || (h === '<17 h' && formData.horaSalidaEstudios === 'Antes de las 17 h')) ? s.dotFilled : s.dotEmpty} />
+                      <Text style={s.labelSmall}>{h}</Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={s.labelMicro}>Disponib. manana</Text>
+                  {([{ label: 'Si', val: true }, { label: 'No', val: false }]).map(op => (
+                    <View key={op.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <View style={formData.disponibilidadManana === op.val ? s.boxFilled : s.boxEmpty} />
+                      <Text style={s.labelSmall}>{op.label}</Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={s.labelMicro}>Autorizacion imagen</Text>
+                  {([{ label: 'Si', val: true }, { label: 'No', val: false }]).map(op => (
+                    <View key={op.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <View style={formData.autorizacionImagen === op.val ? s.boxFilled : s.boxEmpty} />
+                      <Text style={s.labelSmall}>{op.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            {/* Menores */}
+            {(formData.tutor1Nombre || formData.tutor2Nombre) && (
+              <View style={s.card}>
+                <Text style={s.sectionTitle}>Menores de 18 anos — Tutores Legales</Text>
+                {formData.tutor1Nombre && (
+                  <View style={s.row}>
+                    <View style={{ flex: 3 }}><Field label="Tutor/a Legal 1 (Apellidos y Nombre)" value={formData.tutor1Nombre} /></View>
+                    <View style={{ flex: 1 }}><Field label="D.N.I." value={formData.tutor1Dni} /></View>
+                  </View>
+                )}
+                {formData.tutor2Nombre && (
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    <View style={{ flex: 3 }}><Field label="Tutor/a Legal 2 (Apellidos y Nombre)" value={formData.tutor2Nombre} /></View>
+                    <View style={{ flex: 1 }}><Field label="D.N.I." value={formData.tutor2Dni} /></View>
+                  </View>
+                )}
+              </View>
+            )}
+
+          </View>
+
+          {/* Columna derecha: Forma de Pago */}
+          <View style={{ flex: 1.4 }}>
+            <View style={s.card}>
+              <Text style={s.sectionTitle}>Forma de Pago</Text>
+              <View style={{ marginBottom: 8 }}>
+                <Field label="Modalidad" value={formData.formaPago === 'unico' ? 'Pago Unico' : formData.formaPago === 'fraccionado' ? 'Pago Fraccionado' : formData.formaPago === 'beca' ? 'Solicita Beca' : '—'} />
+              </View>
+
+              {/* Desglose */}
+              {d && (
+                <View style={{ backgroundColor: C.gray50, borderRadius: 5, padding: 8, borderWidth: 1, borderColor: C.gray100, borderStyle: 'solid', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray400, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }}>Desglose de Tasas</Text>
+                  <DesgloseRow label="Servicios Generales" value={`${d.serviciosGenerales.toFixed(2)} EUR`} />
+                  {d.aperturaExpediente > 0 && <DesgloseRow label="Apertura de Expediente" value={`${d.aperturaExpediente.toFixed(2)} EUR`} />}
+                  <DesgloseRow label={`Matricula Curso (${formData.curso})`} value={`${d.curso.toFixed(2)} EUR`} />
+                  {d.asignaturasPendientes > 0 && <DesgloseRow label="Asignaturas Pendientes" value={`${d.asignaturasPendientes.toFixed(2)} EUR`} />}
+                  {d.matriculaHonorDiscount > 0 && (
+                    <View style={{ borderTopWidth: 1, borderTopColor: C.gray200, borderTopStyle: 'solid', marginTop: 2 }}>
+                      <DesgloseRow label="Matricula de Honor (Art. 13)" value={`-${d.matriculaHonorDiscount.toFixed(2)} EUR`} discount />
+                    </View>
+                  )}
+                  {d.multiplier < 1 && (
+                    <View style={{ borderTopWidth: 1, borderTopColor: C.gray200, borderTopStyle: 'solid', marginTop: 2 }}>
+                      <DesgloseRow label="Reduccion aplicada" value={`-${((1 - d.multiplier) * 100).toFixed(0)}%`} discount />
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Importes */}
+              {formData.formaPago !== 'beca' && formData.importeTotal && (
+                <View style={{ gap: 4 }}>
+                  <Field label="Importe Total (EUR)" value={`${formData.importeTotal} EUR`} highlight />
+                  {formData.formaPago === 'fraccionado' && (
+                    <>
+                      <Field label="1er Pago (EUR)" value={`${formData.importe1erPago} EUR`} />
+                      <Field label="2o Pago (EUR)" value={`${formData.importe2oPago} EUR`} />
+                    </>
+                  )}
+                </View>
+              )}
+              {formData.formaPago === 'beca' && (
+                <View style={{ backgroundColor: C.blue50, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: C.blue200, borderStyle: 'solid' }}>
+                  <Text style={{ fontSize: 7.5, color: C.blue700 }}>Aporta justificante de solicitud de Beca en plazo.</Text>
+                </View>
+              )}
+              {formData.esPrimerAno && (
+                <Text style={{ fontSize: 7, color: C.gray400, marginTop: 4 }}>* Incluye apertura de expediente (25 EUR).</Text>
+              )}
+            </View>
+          </View>
+        </View>
+
+        {/* ── Fila 2: Datos de Matriculacion — ancho completo ── */}
+        <View style={s.card}>
+          <Text style={s.sectionTitle}>Datos de Matriculacion</Text>
+          <View style={s.row}>
+            <View style={{ flex: 1 }}><Field label="Tipo de Ensenanza" value={formData.tipoEnsenanza === 'elemental' ? 'Ensenanza Elemental' : formData.tipoEnsenanza === 'profesional' ? 'Ensenanza Profesional' : '—'} /></View>
+            <View style={{ width: 60 }}><Field label="Curso" value={formData.curso} /></View>
+            <View style={{ flex: 1.4 }}><Field label="Especialidad" value={formData.especialidad} /></View>
+            {formData.asignaturaPendiente1 && (
+              <View style={{ flex: 1.4 }}><Field label="Asignatura Pendiente 1" value={selectedPendingSubjects[0]?.label || formData.asignaturaPendiente1} /></View>
+            )}
+            {formData.tipoEnsenanza === 'profesional' && formData.asignaturaPendiente2 && (
+              <View style={{ flex: 1.4 }}><Field label="Asignatura Pendiente 2" value={selectedPendingSubjects[1]?.label || formData.asignaturaPendiente2} /></View>
+            )}
+          </View>
+          {showPerfil && (
+            <View style={{ backgroundColor: C.gray900, borderRadius: 6, padding: 8, marginTop: 4, marginBottom: 4 }}>
+              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray400, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 1 }}>Perfil Elegido</Text>
+              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>Perfil {formData.perfilProfesional} — {perfilLabel}</Text>
+            </View>
+          )}
+          {(asignaturasCursoActual.length > 0 || selectedPendingSubjects.length > 0) && (
+            <View style={{ backgroundColor: C.blue50, borderRadius: 6, padding: 8, borderWidth: 1, borderColor: C.blue200, borderStyle: 'solid', marginTop: 4 }}>
+              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.blue800, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>
+                Asignaturas en las que se matricula
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
+                {selectedPendingSubjects.map(m => (
+                  <View key={`p-${m.id}`} style={{ width: '24%', backgroundColor: C.orange50, borderRadius: 4, borderWidth: 1, borderColor: C.orange200, borderStyle: 'solid', paddingHorizontal: 6, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 7, color: C.orange800 }}>{m.label} (Pend.)</Text>
+                  </View>
+                ))}
+                {asignaturasCursoActual.map(m => (
+                  <View key={m.MATERIA} style={{ width: '24%', backgroundColor: C.white, borderRadius: 4, borderWidth: 1, borderColor: C.blue200, borderStyle: 'solid', paddingHorizontal: 6, paddingVertical: 3 }}>
+                    <Text style={{ fontSize: 7, color: C.gray700 }}>{m.DESCRIPCION}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* ── Pie de página ── */}
+        <View style={{ position: 'absolute', bottom: 20, left: 20, right: 20, paddingTop: 6, borderTopWidth: 1, borderTopColor: C.gray200, borderTopStyle: 'solid', flexDirection: 'row', justifyContent: 'space-between' }}>
+          <View style={{ gap: 1.5 }}>
+            <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.gray700 }}>Consejeria de Educacion, Cultura y Deportes</Text>
+            <Text style={{ fontSize: 7, color: C.gray700 }}>Conservatorio Profesional de Musica "Marcos Redondo"</Text>
+            <Text style={{ fontSize: 7, color: C.gray500 }}>Calle Pantano del Vicario, 1  -  13004 Ciudad Real</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end', gap: 1.5 }}>
+            <Text style={{ fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.gray700 }}>926 274 154</Text>
+            <Text style={{ fontSize: 7, color: C.gray500 }}>13004341.cpm@educastillalamancha.es</Text>
+            <Text style={{ fontSize: 7, color: C.gray500 }}>www.conservatoriociudadreal.es</Text>
+          </View>
+        </View>
+
+      </Page>
+    </Document>
+  );
+};

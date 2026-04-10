@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(grep -r Enviar ./src --include=*.tsx --include=*.jsx)",
+      "Bash(npm run:*)",
+      "Bash(pkill -f \"vite --port\")",
+      "Bash(grep -E \"\\\\.\\(json|html|ts|tsx|js|jsx|css\\)$\")",
+      "Bash(python -c \":*)",
+      "Bash(python3 -c \":*)",
+      "Bash(where python:*)",
+      "Bash(where py:*)",
+      "Bash(py --version)",
+      "Bash(py -c \":*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(xargs ls:*)",
+      "Bash(node -e \":*)",
+      "WebFetch(domain:modelos-tributos.jccm.es)",
+      "WebFetch(domain:www.jccm.es)",
+      "WebFetch(domain:portaltributario.jccm.es)",
+      "Bash(find 'G:\\\\Dev\\\\Modelo Matricula OnLine' -type f -name *.js -o -name *.jsx -o -name *.ts -o -name *.tsx -o -name *.html -o -name *.vue)",
+      "Bash(python -c \"import pypdf; import reportlab; print\\('OK'\\)\")",
+      "Bash(pip install:*)",
+      "Bash(python -c \"import pypdf; import reportlab; print\\('Librerias OK'\\)\")",
+      "Bash(python -m pip install pypdf reportlab -q)",
+      "Read(//c/Users/halco/**)",
+      "Bash(dir \"C:\\\\Users\\\\halco\")",
+      "Bash(dir \"C:\\\\Users\\\\halco\\\\Documents\")",
+      "Bash(findstr -i \"matricul\")",
+      "Bash(python -c ':*)"
+    ]
+  }
+}

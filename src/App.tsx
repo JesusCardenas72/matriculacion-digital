@@ -1,0 +1,2110 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useMemo } from 'react';
+import { EnrollmentFormData } from './types';
+import { materias } from './data/materias';
+import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, FileText, Download, Paperclip, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { pdf } from '@react-pdf/renderer';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { MatriculaPdf } from './MatriculaPdf';
+import logoCpm from './assets/logo_cpm.png';
+import logoJccm from './assets/logo_jccm.png';
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [formData, setFormData] = useState<EnrollmentFormData>({
+    nombre: '',
+    apellidos: '',
+    dni: '',
+    fechaNacimiento: '',
+    domicilio: '',
+    localidad: '',
+    provincia: '',
+    codigoPostal: '',
+    email: '',
+    telefono: '',
+    horaSalidaEstudios: '',
+    disponibilidadManana: false,
+    autorizacionImagen: false,
+    tutor1Nombre: '',
+    tutor1Dni: '',
+    tutor2Nombre: '',
+    tutor2Dni: '',
+    tipoEnsenanza: 'elemental',
+    curso: '',
+    especialidad: '',
+    asignaturaPendiente1: '',
+    asignaturaPendiente2: '',
+    perfilProfesional: '',
+    formaPago: 'unico',
+    familiaNumerosa: false,
+    tipoReduccion: 'ninguna',
+    matriculaHonor: false,
+    esPrimerAno: false,
+    importeTotal: '',
+    importe1erPago: '',
+    importe2oPago: '',
+  });
+
+  const [isExemptionModalOpen, setIsExemptionModalOpen] = useState(false);
+  const [isAperturaWarningOpen, setIsAperturaWarningOpen] = useState(false);
+  const [isFeesInfoModalOpen, setIsFeesInfoModalOpen] = useState(false);
+  const [isModelo046InfoOpen, setIsModelo046InfoOpen] = useState(false);
+  const [selectedArticle, setSelectedArticle] = useState<{ title: string; text: string } | null>(null);
+  const [validationErrors, setValidationErrors] = useState<{ key: string; label: string }[]>([]);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'form' | 'readonly'>('form');
+
+  const handleValidationClose = () => {
+    setShowValidationModal(false);
+    if (validationErrors.length > 0) {
+      const firstErrorKey = validationErrors[0].key;
+      const element = document.getElementsByName(firstErrorKey)[0];
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.focus({ preventScroll: true });
+        }, 300);
+      }
+    }
+  };
+
+  const ARTICLE_TEXTS = {
+    apertura_expediente: {
+      title: 'Artículo 12. Apertura de expediente académico',
+      text: '1. El alumnado que se matricule por primera vez en un centro público para cursar enseñanzas elementales o profesionales de música o de danza, o que inicie una nueva enseñanza o especialidad, deberá abonar el precio público por apertura de expediente académico previsto en esta orden.'
+    },
+    fam_num: {
+      title: 'Artículo 14. Alumnado miembro de familia numerosa',
+      text: '1. De conformidad con la Ley 40/2003, de 18 de noviembre, de Protección a las Familias Numerosas:\n\na) El alumnado miembro de familia numerosa clasificada en la categoría especial estará exento del pago de los precios públicos previstos en esta orden.\n\nb) El alumnado miembro de familia numerosa clasificada en la categoría general tendrá una bonificación del cincuenta por ciento de los precios públicos previstos en esta orden.'
+    },
+    discapacidad: {
+      title: 'Artículo 15. Alumnado con discapacidad',
+      text: '1. Está exento del pago de los precios públicos previstos en esta orden el alumnado que tenga reconocido un grado de discapacidad igual o superior al 33 por ciento en los términos previstos en el artículo 4.2 del Texto Refundido de la Ley General de derechos de las personas con discapacidad y de su inclusión social, aprobado por Real Decreto Legislativo 1/2013, de 29 de noviembre.'
+    },
+    terrorismo: {
+      title: 'Artículo 16. Víctimas de actos terroristas',
+      text: '1. Está exento del pago de los precios públicos previstos en esta orden el alumnado que haya sido víctima de actos terroristas o sea hijo o cónyuge no separado legalmente de fallecidos o heridos en actos terroristas, de conformidad con el artículo 38 de la Ley 29/2011, de 22 de septiembre, de Reconocimiento y Protección Integral a las víctimas del Terrorismo.'
+    },
+    violencia_genero: {
+      title: 'Artículo 17. Víctimas de violencia de género',
+      text: '1. De conformidad con la Ley Orgánica 1/2004, de 28 de diciembre, de Medidas de Protección Integral contra la Violencia de Género, está exento del pago de los precios públicos previstos en esta orden el alumnado víctima de violencia de género, así como el alumnado menor de 25 años cuyas progenitoras la sufran.'
+    },
+    ingreso_minimo: {
+      title: 'Artículo 18. Familias perceptoras del ingreso mínimo de solidaridad',
+      text: '1. Está exento del pago de los precios públicos previstos en esta orden el alumnado perteneciente a familias con renta familiar igual o inferior a la renta que da derecho a la percepción del ingreso mínimo de solidaridad, según lo previsto en la disposición adicional vigesimosexta Ley 7/2017, de 21 de diciembre, de Presupuestos Generales de la Junta de Comunidades de Castilla-La Mancha para 2018.'
+    },
+    matricula_honor: {
+      title: 'Artículo 13. Alumnado con matrícula de honor y premios extraordinarios.',
+      text: '3. En las enseñanzas artísticas profesionales cursadas en centros públicos dependientes de la consejería con competencias en materia de educación, la obtención de matrícula de honor en una o más asignaturas dará derecho al alumnado, en el curso académico inmediatamente posterior de la misma enseñanza, a una exención del pago en primera matrícula equivalente al importe correspondiente al número de asignaturas en que haya obtenido dicha calificación.'
+    }
+  };
+
+  const FEES = {
+    elemental: {
+      pruebaAcceso: 0,
+      aperturaExpediente: 25,
+      serviciosGenerales: 10,
+      precioAsignatura: 47,
+      cursos: {
+        '1º': 94,
+        '2º': 94,
+        '3º': 188,
+        '4º': 188,
+      }
+    },
+    profesional: {
+      pruebaAcceso: 40,
+      aperturaExpediente: 25,
+      serviciosGenerales: 10,
+      precioAsignatura: 58,
+      cursos: {
+        '1º': 232,
+        '2º': 232,
+        '3º': 348,
+        '4º': 348,
+        '5º': 348,
+        '6º': 348,
+      }
+    }
+  };
+
+  const calculation = useMemo(() => {
+    if (!formData.tipoEnsenanza || !formData.curso) return null;
+
+    const fees = FEES[formData.tipoEnsenanza as 'elemental' | 'profesional'];
+    let cursoBase = (fees.cursos as any)[formData.curso] || 0;
+    
+    let subtotalAdmin = fees.serviciosGenerales;
+    if (formData.esPrimerAno) subtotalAdmin += fees.aperturaExpediente;
+
+    let subtotalAcad = cursoBase;
+    
+    // Asignaturas sueltas (pendientes) - Se aplica automáticamente el recargo del 20%
+    let pending1Cost = formData.asignaturaPendiente1 ? fees.precioAsignatura * 1.2 : 0;
+    let pending2Cost = formData.asignaturaPendiente2 ? fees.precioAsignatura * 1.2 : 0;
+
+    subtotalAcad += pending1Cost + pending2Cost;
+
+    // Matrícula de Honor: descuenta 58€ (apilable solo con fam_num_general, se aplica antes del multiplicador)
+    if (formData.matriculaHonor) {
+      subtotalAcad = Math.max(0, subtotalAcad - 58);
+    }
+
+    let multiplier = 1;
+    if (formData.tipoReduccion === 'fam_num_general') multiplier = 0.5;
+    else if (formData.tipoReduccion && formData.tipoReduccion !== 'ninguna') multiplier = 0;
+
+    if (formData.formaPago === 'beca') {
+      multiplier = 0;
+    }
+
+    const totalAdmin = subtotalAdmin * multiplier;
+    const totalAcad = subtotalAcad * multiplier;
+    const total = totalAdmin + totalAcad;
+
+    return {
+      admin: totalAdmin,
+      acad: totalAcad,
+      total: total,
+      firstPayment: totalAdmin + (totalAcad / 2),
+      secondPayment: totalAcad / 2,
+      details: {
+        serviciosGenerales: fees.serviciosGenerales * multiplier,
+        aperturaExpediente: formData.esPrimerAno ? fees.aperturaExpediente * multiplier : 0,
+        curso: cursoBase * multiplier,
+        asignaturasPendientes: (pending1Cost + pending2Cost) * multiplier,
+        matriculaHonorDiscount: formData.matriculaHonor ? 58 : 0,
+        multiplier,
+        reductionLabel: (() => {
+          const base = formData.tipoReduccion === 'fam_num_general' ? 'Familia Numerosa General (50%)' :
+                       formData.tipoReduccion === 'fam_num_especial' ? 'Familia Numerosa Especial (100%)' :
+                       formData.tipoReduccion === 'discapacidad' ? 'Discapacidad ≥ 33% (100%)' :
+                       formData.tipoReduccion === 'terrorismo' ? 'Víctima de Terrorismo (100%)' :
+                       formData.tipoReduccion === 'violencia_genero' ? 'Víctima de Violencia de Género (100%)' :
+                       formData.tipoReduccion === 'ingreso_minimo' ? 'Ingreso Mínimo de Solidaridad (100%)' : '';
+          if (formData.matriculaHonor) {
+            return base ? `${base} + Matrícula de Honor` : 'Matrícula de Honor (1 asignatura)';
+          }
+          return base;
+        })()
+      }
+    };
+  }, [formData.tipoEnsenanza, formData.curso, formData.esPrimerAno, formData.tipoReduccion, formData.matriculaHonor, formData.formaPago, formData.asignaturaPendiente1, formData.asignaturaPendiente2]);
+
+  React.useEffect(() => {
+    if (calculation) {
+      setFormData(prev => ({
+        ...prev,
+        importeTotal: calculation.total.toFixed(2),
+        importe1erPago: calculation.firstPayment.toFixed(2),
+        importe2oPago: calculation.secondPayment.toFixed(2),
+      }));
+    }
+  }, [calculation]);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
+
+  // ── Supabase config ────────────────────────────────────────────────────────
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+  const [powerAutomateUrl, setPowerAutomateUrl] = useState<string>(
+    import.meta.env.VITE_POWER_AUTOMATE_URL || ''
+  );
+  const [powerAutomateUrlPdf, setPowerAutomateUrlPdf] = useState<string>(
+    import.meta.env.VITE_POWER_AUTOMATE_URL_PDF || ''
+  );
+
+  // Carga las URLs desde Supabase al montar (tienen prioridad sobre .env)
+  const [supabaseError, setSupabaseError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      setSupabaseError('missing_env');
+      return;
+    }
+    const headers = {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    };
+    Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.power_automate_url&select=value`, { headers }),
+      fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.power_automate_url_pdf&select=value`, { headers }),
+    ])
+      .then(async ([r1, r2]) => {
+        if (!r1.ok) throw new Error(`HTTP ${r1.status}`);
+        const [rows1, rows2]: [{ value: string }[], { value: string }[]] = await Promise.all([r1.json(), r2.json()]);
+        if (rows1?.[0]?.value) {
+          setPowerAutomateUrl(rows1[0].value);
+          setSupabaseError(null);
+        } else {
+          setSupabaseError('empty_table');
+        }
+        if (rows2?.[0]?.value) setPowerAutomateUrlPdf(rows2[0].value);
+      })
+      .catch((e: Error) => {
+        console.error(e);
+        setSupabaseError(e.message || 'fetch_error');
+      });
+  }, []);
+
+  // ── Menú oculto: F10 × 2 en menos de 600 ms ───────────────────────────────
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [adminUrlInput, setAdminUrlInput] = useState('');
+  const [adminUrlPdfInput, setAdminUrlPdfInput] = useState('');
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [adminSaveStatus, setAdminSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const lastF10Ref = React.useRef<number>(0);
+
+  React.useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'F10') return;
+      e.preventDefault();
+      const now = Date.now();
+      if (now - lastF10Ref.current < 600) {
+        setAdminUrlInput(powerAutomateUrl);
+        setAdminUrlPdfInput(powerAutomateUrlPdf);
+        setAdminSaveStatus('idle');
+        setIsAdminOpen(true);
+      }
+      lastF10Ref.current = now;
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [powerAutomateUrl, powerAutomateUrlPdf]);
+
+  const handleAdminSave = async () => {
+    setAdminSaving(true);
+    setAdminSaveStatus('idle');
+    const patchHeaders = {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    };
+    try {
+      const [res1, res2] = await Promise.all([
+        fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.power_automate_url`, {
+          method: 'PATCH',
+          headers: patchHeaders,
+          body: JSON.stringify({ value: adminUrlInput, updated_at: new Date().toISOString() }),
+        }),
+        fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.power_automate_url_pdf`, {
+          method: 'PATCH',
+          headers: patchHeaders,
+          body: JSON.stringify({ value: adminUrlPdfInput, updated_at: new Date().toISOString() }),
+        }),
+      ]);
+      if (!res1.ok || !res2.ok) throw new Error();
+      setPowerAutomateUrl(adminUrlInput);
+      setPowerAutomateUrlPdf(adminUrlPdfInput);
+      setAdminSaveStatus('success');
+    } catch {
+      setAdminSaveStatus('error');
+    } finally {
+      setAdminSaving(false);
+    }
+  };
+
+  const cursos = useMemo(() => {
+    if (formData.tipoEnsenanza === 'elemental') return ['1º', '2º', '3º', '4º'];
+    if (formData.tipoEnsenanza === 'profesional') return ['1º', '2º', '3º', '4º', '5º', '6º'];
+    return [];
+  }, [formData.tipoEnsenanza]);
+
+  const asignaturasCursoActual = useMemo(() => {
+    if (!formData.especialidad || !formData.curso || !formData.tipoEnsenanza) return [];
+    
+    const cursoNum = parseInt(formData.curso);
+    const tipoStr = formData.tipoEnsenanza === 'profesional' ? 'Profesional' : 'Elemental';
+    const is5o6 = (formData.curso.includes('5') || formData.curso.includes('6')) && formData.tipoEnsenanza === 'profesional';
+    
+    return materias.filter(m => {
+      const mTipo = m.ENSEÑANZAS;
+      const mEsp = m.ESPECIALIDAD;
+      const mCursoNum = parseInt(m.CURSO_N);
+      const mDesc = m.DESCRIPCION;
+      
+      const isEspMatch = mEsp.toLowerCase().includes(formData.especialidad.toLowerCase()) || 
+                         formData.especialidad.toLowerCase().includes(mEsp.toLowerCase());
+      
+      if (mTipo !== tipoStr || !isEspMatch || mCursoNum !== cursoNum) return false;
+
+      // Filter by profile for 5th and 6th Professional
+      if (is5o6) {
+        // Perfil A (5º y 6º): Fundamentos de Composición
+        // Perfil B 5º: Improvisación + Informática musical
+        // Perfil B 6º: Improvisación + Didáctica musical
+        // Perfil C 5º: Improvisación + Coro
+        // Perfil C 6º: Música moderna + Coro
+        const is6th = formData.curso.includes('6');
+        const profileSubjects: Record<string, string[]> = is6th
+          ? {
+              'A': ['Fundamentos de Composición'],
+              'B': ['Improvisación', 'Didáctica de la Música', 'Didáctica musical'],
+              'C': ['Música moderna', 'Coro']
+            }
+          : {
+              'A': ['Fundamentos de Composición'],
+              'B': ['Improvisación', 'Informática musical'],
+              'C': ['Improvisación', 'Coro']
+            };
+
+        const allProfileSpecificSubjects = [
+          'Fundamentos de Composición',
+          'Improvisación',
+          'Informática musical',
+          'Didáctica de la Música',
+          'Didáctica musical',
+          'Coro',
+          'Música moderna'
+        ];
+        
+        // If it's a profile-specific subject, check if it matches the selected profile
+        const isProfileSpecific = allProfileSpecificSubjects.some(s => 
+          mDesc.toLowerCase().includes(s.toLowerCase())
+        );
+
+        if (isProfileSpecific) {
+          if (!formData.perfilProfesional) return false; // Hide all profile subjects if no profile selected
+          const allowedForProfile = profileSubjects[formData.perfilProfesional] || [];
+          return allowedForProfile.some(s => mDesc.toLowerCase().includes(s.toLowerCase()));
+        }
+      }
+      
+      return true;
+    });
+  }, [formData.especialidad, formData.curso, formData.tipoEnsenanza, formData.perfilProfesional]);
+
+  const asignaturasPrevias = useMemo(() => {
+    if (!formData.especialidad || !formData.curso || !formData.tipoEnsenanza) return [];
+    
+    const cursoNum = parseInt(formData.curso);
+    const tipoStr = formData.tipoEnsenanza === 'profesional' ? 'Profesional' : 'Elemental';
+    
+    return materias.filter(m => {
+      const mTipo = m.ENSEÑANZAS;
+      const mEsp = m.ESPECIALIDAD;
+      const mCursoNum = parseInt(m.CURSO_N);
+      
+      const isEspMatch = mEsp.toLowerCase().includes(formData.especialidad.toLowerCase()) || 
+                         formData.especialidad.toLowerCase().includes(mEsp.toLowerCase());
+      
+      return mTipo === tipoStr && isEspMatch && mCursoNum < cursoNum;
+    }).map(m => {
+      return {
+        id: m.MATERIA,
+        label: `${m.DESCRIPCION} (${m.CURSO_N})`,
+        materiaId: m.MATERIA
+      };
+    }).sort((a, b) => a.label.localeCompare(b.label));
+  }, [formData.especialidad, formData.curso, formData.tipoEnsenanza]);
+
+  const selectedPendingSubjects = useMemo(() => {
+    const selected = [];
+    if (formData.asignaturaPendiente1) {
+      const found = asignaturasPrevias.find(a => a.id === formData.asignaturaPendiente1);
+      if (found) selected.push(found);
+    }
+    if (formData.asignaturaPendiente2) {
+      const found = asignaturasPrevias.find(a => a.id === formData.asignaturaPendiente2);
+      if (found) selected.push(found);
+    }
+    return selected;
+  }, [formData.asignaturaPendiente1, formData.asignaturaPendiente2, asignaturasPrevias]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+    
+    if (name === 'formaPago' && (value === 'unico' || value === 'fraccionado')) {
+      if (formData.curso.includes('1º') && !formData.esPrimerAno) {
+        setIsAperturaWarningOpen(true);
+      }
+    }
+
+    setFormData(prev => {
+      const newData = { ...prev, [name]: val };
+      
+      // Reset dependent fields
+      if (name === 'tipoEnsenanza') {
+        newData.curso = '';
+        newData.perfilProfesional = '';
+        newData.asignaturaPendiente1 = '';
+        newData.asignaturaPendiente2 = '';
+        if (val === 'elemental' && newData.formaPago === 'beca') {
+          newData.formaPago = '';
+        }
+        if (val === 'elemental' && newData.especialidad === 'Canto') {
+          newData.especialidad = '';
+        }
+      }
+      if (name === 'curso' || name === 'especialidad') {
+        newData.perfilProfesional = '';
+        newData.asignaturaPendiente1 = '';
+        newData.asignaturaPendiente2 = '';
+      }
+      
+      return newData;
+    });
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files: File[] = e.target.files ? Array.from(e.target.files) : [];
+    const validFiles = files.filter(file => {
+      const isImage = file.type.startsWith('image/');
+      const isPdf = file.type === 'application/pdf';
+      return isImage || isPdf;
+    });
+
+    setAttachments(prev => [...prev, ...validFiles]);
+    e.target.value = '';
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validation
+    const requiredFields: { key: keyof EnrollmentFormData; label: string }[] = [
+      { key: 'nombre', label: 'Nombre' },
+      { key: 'apellidos', label: 'Apellidos' },
+      { key: 'dni', label: 'D.N.I. / N.I.E.' },
+      { key: 'fechaNacimiento', label: 'Fecha de Nacimiento' },
+      { key: 'domicilio', label: 'Domicilio Actual' },
+      { key: 'localidad', label: 'Localidad' },
+      { key: 'provincia', label: 'Provincia' },
+      { key: 'codigoPostal', label: 'C.P.' },
+      { key: 'email', label: 'Correo Electrónico' },
+      { key: 'telefono', label: 'Teléfono' },
+      { key: 'horaSalidaEstudios', label: 'Hora salida otros estudios' },
+      { key: 'tipoEnsenanza', label: 'Tipo de Enseñanza' },
+      { key: 'curso', label: 'Curso' },
+      { key: 'especialidad', label: 'Especialidad' },
+      { key: 'formaPago', label: 'Forma de Pago' },
+    ];
+
+    const missing = requiredFields
+      .filter(field => !formData[field.key]);
+
+    if (missing.length > 0) {
+      setValidationErrors(missing);
+      setShowValidationModal(true);
+      return;
+    }
+
+    const totalAttachmentSize = attachments.reduce((sum, f) => sum + f.size, 0);
+    if (totalAttachmentSize > 9 * 1024 * 1024) {
+      setValidationErrors(['El tamaño total de los documentos adjuntos supera el límite de 9 MB. Por favor, reduce el tamaño o el número de archivos adjuntos.']);
+      setShowValidationModal(true);
+      return;
+    }
+
+    // Validation passed: show preview in readonly mode
+    setViewMode('readonly');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const currentYear = new Date().getFullYear();
+  const academicYear = `${currentYear} / ${currentYear + 1}`;
+
+  // ── helper: convert image File to PNG Uint8Array (for pdf-lib attachments) ──
+  const _imageToPngBytes = (file: File): Promise<Uint8Array> =>
+    new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        c.getContext('2d')!.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        fetch(c.toDataURL('image/png'))
+          .then(r => r.arrayBuffer()).then(ab => resolve(new Uint8Array(ab))).catch(reject);
+      };
+      img.onerror = reject; img.src = url;
+    });
+
+  // ── helper: build the final merged PDF (page 1 = form, rest = attachments) ──
+  const buildPdfBytes = async (ts: Date): Promise<{ bytes: Uint8Array; filename: string }> => {
+    const mainBlob = await pdf(
+      <MatriculaPdf
+        formData={formData}
+        academicYear={academicYear}
+        submitTimestamp={ts}
+        asignaturasCursoActual={asignaturasCursoActual}
+        selectedPendingSubjects={selectedPendingSubjects}
+        calculation={calculation}
+      />
+    ).toBlob();
+
+    const ds = ts.toLocaleDateString('es-ES').replace(/\//g, '-');
+    const hs = ts.toLocaleTimeString('es-ES').replace(/:/g, '-');
+    const filename = `SOLICITUD_${ds}_${hs}.pdf`;
+
+    if (attachments.length === 0) {
+      return { bytes: new Uint8Array(await mainBlob.arrayBuffer()), filename };
+    }
+
+    // Merge attachments as subsequent pages
+    const mainBytes = new Uint8Array(await mainBlob.arrayBuffer());
+    const pdfDoc = await PDFDocument.load(mainBytes);
+    const A4W = 595.28, A4H = 841.89;
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    for (const file of attachments) {
+      if (file.type === 'application/pdf') {
+        const srcDoc = await PDFDocument.load(await file.arrayBuffer());
+        const copied = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+        copied.forEach(pg => pdfDoc.addPage(pg));
+      } else if (file.type.startsWith('image/')) {
+        const embImg = file.type === 'image/jpeg'
+          ? await pdfDoc.embedJpg(await file.arrayBuffer())
+          : await pdfDoc.embedPng(await _imageToPngBytes(file));
+        const { width: iW, height: iH } = embImg;
+        const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
+        const pg = pdfDoc.addPage([A4W, A4H]);
+        pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
+        pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+      }
+    }
+
+    return { bytes: await pdfDoc.save(), filename };
+  };
+
+  // ── helper: encode Uint8Array to Base64 safely (chunked to avoid stack overflow) ──
+  const uint8ToBase64 = (bytes: Uint8Array): string => {
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  };
+
+  const handleSendAndDownload = async () => {
+    setIsSubmitting(true);
+    setSubmitStatus('idle');
+    const alreadySubmitted = submitTimestamp !== null;
+
+    try {
+      const now = alreadySubmitted ? submitTimestamp : new Date();
+      if (!alreadySubmitted) setSubmitTimestamp(now);
+
+      // Build the PDF (same file user will download)
+      const { bytes: pdfBytes, filename } = await buildPdfBytes(now);
+
+      if (!alreadySubmitted) {
+      if (!powerAutomateUrl) {
+        console.warn('Power Automate URL not configured. Simulating success.');
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      } else {
+        // ── Llamada 1: enviar datos JSON → obtener rowId ──────────────────
+        const ensenanzaCursoPrefix = formData.tipoEnsenanza === 'elemental' ? 'EE' : formData.tipoEnsenanza === 'profesional' ? 'EP' : '';
+        const ensenanzaCursoNum = formData.curso.replace(/\D/g, '');
+        const ensenanzaCurso = ensenanzaCursoPrefix && ensenanzaCursoNum ? `${ensenanzaCursoPrefix}${ensenanzaCursoNum}` : '';
+
+        const jsonPayload = {
+          nombre: formData.nombre,
+          apellidos: formData.apellidos,
+          dni: formData.dni,
+          fechaNacimiento: formData.fechaNacimiento,
+          domicilio: formData.domicilio,
+          localidad: formData.localidad,
+          provincia: formData.provincia,
+          codigoPostal: formData.codigoPostal,
+          email: formData.email,
+          telefono: formData.telefono,
+          horaSalidaEstudios: formData.horaSalidaEstudios,
+          disponibilidadManana: formData.disponibilidadManana,
+          autorizacionImagen: formData.autorizacionImagen,
+          tutor1Nombre: formData.tutor1Nombre,
+          tutor1Dni: formData.tutor1Dni,
+          tutor2Nombre: formData.tutor2Nombre,
+          tutor2Dni: formData.tutor2Dni,
+          tipoEnsenanza: formData.tipoEnsenanza,
+          curso: formData.curso,
+          ensenanzaCurso,
+          especialidad: formData.especialidad,
+          asignaturaPendiente1: formData.asignaturaPendiente1,
+          asignaturaPendiente2: formData.asignaturaPendiente2 ?? '',
+          perfilProfesional: formData.perfilProfesional,
+          formaPago: formData.formaPago,
+          familiaNumerosa: formData.familiaNumerosa,
+          tipoReduccion: formData.tipoReduccion,
+          matriculaHonor: formData.matriculaHonor,
+          esPrimerAno: formData.esPrimerAno,
+          importeTotal: formData.importeTotal,
+          importe1erPago: formData.importe1erPago ?? '',
+          importe2oPago: formData.importe2oPago ?? '',
+          estado: 'Recibida',
+        };
+
+        const res1 = await fetch(powerAutomateUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(jsonPayload),
+        });
+        if (!res1.ok) throw new Error(`Error al crear el registro (HTTP ${res1.status})`);
+
+        const data1 = await res1.json();
+        const rowId: string = data1?.rowId;
+        if (!rowId) throw new Error('No se recibió rowId del servidor');
+
+        // ── Llamada 2: subir el PDF en Base64 ────────────────────────────
+        const REDUCCION_LABEL: Record<string, string> = {
+          ninguna:          'Ninguna',
+          fam_num_general:  'Familia Numerosa General',
+          fam_num_especial: 'Familia Numerosa Especial',
+          discapacidad:     'Discapacidad',
+          terrorismo:       'Víctima de Terrorismo',
+          violencia_genero: 'Violencia de Género',
+          ingreso_minimo:   'Ingreso Mínimo de Solidaridad',
+        };
+        const perfilEmailLabel =
+          formData.perfilProfesional === 'A' ? 'Perfil A — Fundamentos de Composición'
+          : formData.perfilProfesional === 'B' ? (formData.curso.includes('5') ? 'Perfil B — Improvisación / Informática Musical' : 'Perfil B — Didáctica Musical / Improvisación')
+          : formData.perfilProfesional === 'C' ? (formData.curso.includes('5') ? 'Perfil C — Improvisación / Instrumento Complementario' : 'Perfil C — Improvisación / Música Moderna')
+          : '';
+
+        const pdfUrl = powerAutomateUrlPdf || powerAutomateUrl;
+        const res2 = await fetch(pdfUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rowId,
+            fileName: filename,
+            mimeType: 'application/pdf',
+            contentBase64: uint8ToBase64(pdfBytes),
+            // Datos para el email de confirmación
+            nombre:               formData.nombre,
+            apellidos:            formData.apellidos,
+            email:                formData.email,
+            tipoCurso:            `${formData.tipoEnsenanza === 'elemental' ? 'Enseñanza Elemental' : 'Enseñanza Profesional'} — ${formData.curso}`,
+            especialidad:         formData.especialidad,
+            asignaturaPendiente1: selectedPendingSubjects[0]?.label || formData.asignaturaPendiente1 || '',
+            asignaturaPendiente2: selectedPendingSubjects[1]?.label || formData.asignaturaPendiente2 || '',
+            perfil:               perfilEmailLabel,
+            formaPago:            formData.formaPago === 'unico' ? 'Pago Único' : formData.formaPago === 'fraccionado' ? 'Pago Fraccionado' : 'Solicita Beca',
+            reduccion:            REDUCCION_LABEL[formData.tipoReduccion ?? ''] ?? '',
+            importeTotal:         formData.importeTotal ? `${formData.importeTotal} EUR` : '',
+            importe1erPago:       formData.importe1erPago ? `${formData.importe1erPago} EUR` : '',
+            importe2oPago:        formData.importe2oPago ? `${formData.importe2oPago} EUR` : '',
+          }),
+        });
+        if (!res2.ok) throw new Error(`Error al subir el PDF (HTTP ${res2.status})`);
+      }
+      } // end if (!alreadySubmitted)
+
+      // Descarga el PDF al usuario (mismo archivo enviado)
+      const downloadUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = downloadUrl; link.download = filename; link.click();
+      URL.revokeObjectURL(downloadUrl);
+
+      setSubmitStatus('success');
+      if (!alreadySubmitted) setAttachments([]);
+    } catch (error) {
+      console.error(error);
+      setSubmitStatus('error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (submitStatus === 'success') {
+    return (
+      <div className="min-h-screen bg-[#f5f5f5] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white p-8 rounded-3xl shadow-sm max-w-md w-full text-center"
+        >
+          <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircle2 size={40} />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">¡Matrícula Enviada!</h2>
+          <p className="text-gray-600 mb-6">
+            Tu solicitud para el curso {academicYear} ha sido recibida correctamente. Recibirás un correo de confirmación en breve.
+          </p>
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => setSubmitStatus('idle')}
+              className="w-full py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-colors"
+            >
+              ← Volver
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSubmitStatus('idle');
+                setViewMode('form');
+                setFormData({
+                  nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: ''
+                });
+              }}
+              className="w-full py-3 bg-white text-gray-900 border-2 border-gray-100 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+            >
+              Nueva Solicitud
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f5f5f5] text-gray-900 font-sans py-4 sm:py-8 px-2 sm:px-4">
+      <div className="max-w-4xl mx-auto">
+        {viewMode === 'readonly' && (
+          <div className="mb-6 flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+            <button
+              type="button"
+              onClick={() => setViewMode('form')}
+              className="px-4 py-2 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              ← Volver
+            </button>
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={handleSendAndDownload}
+              className="px-6 py-2.5 bg-orange-500 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-orange-600 transition-all flex items-center gap-2 shadow-lg shadow-orange-500/30 disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  {submitTimestamp ? 'Descargando...' : 'Enviando...'}
+                </>
+              ) : submitTimestamp ? (
+                <>
+                  <Download size={18} />
+                  Descargar PDF
+                </>
+              ) : (
+                <>
+                  <Download size={18} />
+                  Enviar y Descargar
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        <div id="solicitud-pdf-content" className="bg-[#f5f5f5] p-2 sm:p-4 rounded-3xl">
+          {/* Header */}
+          <header className="mb-6 md:mb-10 flex items-center justify-between gap-2 sm:gap-4 bg-white p-3 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl shadow-sm border border-gray-100">
+          <div className="flex-shrink-0">
+            <img
+              src={logoJccm}
+              alt="JCCM"
+              className="h-8 sm:h-12 md:h-16 object-contain"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.currentTarget.src = "https://picsum.photos/seed/jccm/100/60";
+              }}
+            />
+          </div>
+
+          <div className="text-center flex-grow min-w-0 px-1">
+            <h1 className="text-[clamp(0.75rem,3.5vw,1.5rem)] font-bold tracking-tight text-gray-900 mb-0.5 leading-tight">
+              Solicitud de Matrícula
+            </h1>
+            <p className="text-[clamp(0.6rem,2.5vw,0.875rem)] text-gray-500 font-medium">
+              Curso Académico {academicYear}
+            </p>
+            <p className="text-[clamp(0.55rem,2vw,0.75rem)] text-gray-400 mt-0.5">
+              C.P.M. "Marcos Redondo", Ciudad Real
+            </p>
+          </div>
+
+          <div className="flex-shrink-0">
+            <img
+              src={logoCpm}
+              alt="CPM Marcos Redondo"
+              className="h-8 sm:h-12 md:h-16 object-contain"
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.currentTarget.src = "https://picsum.photos/seed/cpm/150/60";
+              }}
+            />
+          </div>
+        </header>
+
+        <form noValidate onSubmit={handleSubmit} className={`space-y-4 sm:space-y-8 ${viewMode === 'readonly' ? 'pointer-events-none opacity-90' : ''}`}>
+          {/* Datos Personales */}
+          <section className="bg-white rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
+              <div className="p-2 bg-gray-50 rounded-lg">
+                <User size={20} className="text-gray-600" />
+              </div>
+              <h2 className="text-base sm:text-xl font-semibold">Datos Personales</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Nombre</label>
+                <input required name="nombre" value={formData.nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Ej: Juan" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Apellidos</label>
+                <input required name="apellidos" value={formData.apellidos} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Ej: Pérez García" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I. / N.I.E.</label>
+                <input required name="dni" value={formData.dni} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="12345678X" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Fecha de Nacimiento</label>
+                <input required type="date" name="fechaNacimiento" value={formData.fechaNacimiento} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+              </div>
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Domicilio Actual</label>
+                <input required name="domicilio" value={formData.domicilio} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Calle, número, piso..." />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Localidad</label>
+                <input required name="localidad" value={formData.localidad} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Provincia</label>
+                  <input name="provincia" value={formData.provincia} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">C.P.</label>
+                  <input required name="codigoPostal" value={formData.codigoPostal} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Correo Electrónico</label>
+                <input required type="email" name="email" value={formData.email} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="ejemplo@correo.com" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Teléfono</label>
+                <input required type="tel" name="telefono" value={formData.telefono} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+              </div>
+            </div>
+
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-50">
+              <div className="space-y-3">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block">Hora salida otros estudios obligatorios</label>
+                <div className="flex gap-4">
+                  {['Antes de las 17 h', '17 h', '18 h'].map((hora) => (
+                    <label key={hora} className="flex items-center gap-2 cursor-pointer group">
+                      <input 
+                        type="radio" 
+                        name="horaSalidaEstudios" 
+                        value={hora} 
+                        checked={formData.horaSalidaEstudios === hora}
+                        onChange={handleChange}
+                        className="w-4 h-4 text-gray-900 border-gray-300 focus:ring-gray-900"
+                      />
+                      <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900">{hora}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col justify-center gap-5">
+                <label className="toggle-label">
+                  <div className="toggle">
+                    <input
+                      className="toggle-state"
+                      type="checkbox"
+                      name="disponibilidadManana"
+                      checked={formData.disponibilidadManana}
+                      onChange={handleChange}
+                      required
+                    />
+                    <div className="indicator" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Disponibilidad horaria de mañana
+                    <span className="text-red-500 ml-0.5">*</span>
+                  </span>
+                </label>
+                <label className="toggle-label">
+                  <div className="toggle">
+                    <input
+                      className="toggle-state"
+                      type="checkbox"
+                      name="autorizacionImagen"
+                      checked={formData.autorizacionImagen}
+                      onChange={handleChange}
+                      required
+                    />
+                    <div className="indicator" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Autorización uso de imagen
+                    <span className="text-red-500 ml-0.5">*</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          {/* Menores de 18 */}
+          <section className="bg-white rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-2">
+              <h2 className="text-base sm:text-xl font-semibold">Menores de 18 años</h2>
+            </div>
+            <p className="text-xs text-gray-400 mb-6 uppercase font-bold tracking-widest">Rellenar solo si aplica</p>
+            
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Tutor/a Legal 1 (Apellidos y Nombre)</label>
+                  <input name="tutor1Nombre" value={formData.tutor1Nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
+                  <input name="tutor1Dni" value={formData.tutor1Dni} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Tutor/a Legal 2 (Apellidos y Nombre)</label>
+                  <input name="tutor2Nombre" value={formData.tutor2Nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
+                  <input name="tutor2Dni" value={formData.tutor2Dni} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Matriculación */}
+          <section className="bg-white rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
+              <div className="p-2 bg-gray-50 rounded-lg">
+                <GraduationCap size={20} className="text-gray-600" />
+              </div>
+              <h2 className="text-base sm:text-xl font-semibold">Datos de Matriculación</h2>
+            </div>
+
+            <div className="space-y-8">
+              <div className="flex flex-wrap gap-6">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input 
+                    type="radio" 
+                    name="tipoEnsenanza" 
+                    value="elemental" 
+                    checked={formData.tipoEnsenanza === 'elemental'}
+                    onChange={handleChange}
+                    className="w-5 h-5 text-gray-900 border-gray-300 focus:ring-gray-900"
+                  />
+                  <span className="text-sm font-bold uppercase tracking-wider text-gray-600 group-hover:text-gray-900">Enseñanza Elemental</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input 
+                    type="radio" 
+                    name="tipoEnsenanza" 
+                    value="profesional" 
+                    checked={formData.tipoEnsenanza === 'profesional'}
+                    onChange={handleChange}
+                    className="w-5 h-5 text-gray-900 border-gray-300 focus:ring-gray-900"
+                  />
+                  <span className="text-sm font-bold uppercase tracking-wider text-gray-600 group-hover:text-gray-900">Enseñanza Profesional</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Curso</label>
+                  <select required name="curso" value={formData.curso} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
+                    <option value="" disabled>Seleccionar curso...</option>
+                    {cursos.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Especialidad</label>
+                  <select 
+                    required 
+                    name="especialidad" 
+                    value={formData.especialidad} 
+                    onChange={handleChange} 
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="" disabled>Seleccionar especialidad...</option>
+                    {[
+                      "Canto", "Clarinete", "Contrabajo", "Fagot", "Flauta Travesera", 
+                      "Guitarra", "Oboe", "Percusión", "Piano", "Saxofón", 
+                      "Trombón", "Trompa", "Trompeta", "Tuba", "Viola", 
+                      "Violín", "Violoncello"
+                    ].filter(esp => !(formData.tipoEnsenanza === 'elemental' && esp === 'Canto')).map((esp) => (
+                      <option key={esp} value={esp}>{esp}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="md:col-span-2 space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Asignatura pendiente 1</label>
+                    <select name="asignaturaPendiente1" value={formData.asignaturaPendiente1} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
+                      <option value="">Ninguna...</option>
+                      {asignaturasPrevias.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.materiaId} - {a.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {formData.tipoEnsenanza === 'profesional' && (
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Asignatura pendiente 2</label>
+                      <select name="asignaturaPendiente2" value={formData.asignaturaPendiente2} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
+                        <option value="">Ninguna...</option>
+                        {asignaturasPrevias.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.materiaId} - {a.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Asignaturas del curso actual */}
+                  <AnimatePresence>
+                    {formData.especialidad && formData.curso && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="md:col-span-2 mt-4"
+                      >
+                        {(asignaturasCursoActual.length > 0 || selectedPendingSubjects.length > 0) ? (
+                          <div className="p-6 bg-blue-50 rounded-2xl border border-blue-200 shadow-sm">
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-blue-900 mb-4 flex items-center gap-2">
+                              <FileText size={16} className="text-blue-600" />
+                              Asignaturas en las que se matricula
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {selectedPendingSubjects.map((m) => (
+                                <div key={`pending-${m.id}`} className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl shadow-sm border border-orange-100">
+                                  <span className="text-[10px] font-mono font-bold text-orange-500 bg-orange-100 px-1.5 py-0.5 rounded">
+                                    {m.materiaId}
+                                  </span>
+                                  <span className="text-sm font-medium text-gray-700">
+                                    {m.label} (Pendiente)
+                                  </span>
+                                </div>
+                              ))}
+                              {asignaturasCursoActual.map((m) => (
+                                <div key={m.MATERIA} className="flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm border border-blue-100">
+                                  <span className="text-[10px] font-mono font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">
+                                    {m.MATERIA}
+                                  </span>
+                                  <span className="text-sm font-medium text-gray-700">
+                                    {m.DESCRIPCION}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-sm flex items-center gap-2">
+                            <AlertCircle size={16} />
+                            No se han encontrado asignaturas para {formData.especialidad} en {formData.curso} de {formData.tipoEnsenanza === 'profesional' ? 'Enseñanza Profesional' : 'Enseñanza Elemental'}.
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+              {/* Perfiles para 5º y 6º Profesional */}
+              <AnimatePresence>
+                {(formData.curso.includes('5') || formData.curso.includes('6')) && formData.tipoEnsenanza === 'profesional' && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="pt-6 border-t border-gray-50"
+                  >
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-4">Elegir un único perfil (Solo 5º y 6º Profesional)</label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {[
+                        { id: 'A', label: 'Perfil A', desc: 'Fundamentos de Composición' },
+                        { id: 'B', label: 'Perfil B', desc: formData.curso.includes('5') ? 'Improvisación / Informática Musical' : 'Didáctica musical / Improvisación' },
+                        { id: 'C', label: 'Perfil C', desc: formData.curso.includes('5') ? 'Improvisación / Coro 1' : 'Música moderna / Coro 2' },
+                      ].map((perfil) => (
+                        <label key={perfil.id} className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col gap-1 ${formData.perfilProfesional === perfil.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                          <input type="radio" name="perfilProfesional" value={perfil.id} checked={formData.perfilProfesional === perfil.id} onChange={handleChange} className="sr-only" />
+                          <span className="font-bold text-sm">{perfil.label}</span>
+                          <span className={`text-xs ${formData.perfilProfesional === perfil.id ? 'text-gray-300' : 'text-gray-500'}`}>{perfil.desc}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </section>
+
+          {/* Forma de Pago */}
+          <section className="bg-white rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gray-50 rounded-lg">
+                  <CreditCard size={20} className="text-gray-600" />
+                </div>
+                <h2 className="text-base sm:text-xl font-semibold">Forma de Pago</h2>
+                <button 
+                  type="button"
+                  onClick={() => setIsFeesInfoModalOpen(true)}
+                  className="p-1.5 text-gray-400 hover:text-gray-900 transition-colors"
+                  title="Ver información de tasas"
+                >
+                  <AlertCircle size={18} />
+                </button>
+              </div>
+              <div className="flex flex-col gap-2 items-end relative">
+                <button 
+                  type="button"
+                  onClick={() => setIsExemptionModalOpen(true)}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${(formData.tipoReduccion && formData.tipoReduccion !== 'ninguna') || formData.matriculaHonor ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+                >
+                  <CheckCircle2 size={16} className={(formData.tipoReduccion && formData.tipoReduccion !== 'ninguna') || formData.matriculaHonor ? 'block' : 'hidden'} />
+                  Reducción o Exención de Tasas
+                </button>
+
+                {((formData.tipoReduccion && formData.tipoReduccion !== 'ninguna') || formData.matriculaHonor) && (
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    {calculation?.details.reductionLabel}
+                  </span>
+                )}
+
+                <AnimatePresence>
+                  {isFeesInfoModalOpen && (
+                    <>
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsFeesInfoModalOpen(false)}
+                        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[120]"
+                      />
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl z-[130] border border-gray-100"
+                      >
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gray-900 text-white rounded-lg">
+                              <AlertCircle size={20} />
+                            </div>
+                            <h3 className="text-xl font-bold">Información de Tasas</h3>
+                          </div>
+                          <button type="button" onClick={() => setIsFeesInfoModalOpen(false)} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
+                            <Music size={20} className="rotate-45" />
+                          </button>
+                        </div>
+                        
+                        <div className="space-y-6">
+                          <div className="bg-gray-50 rounded-2xl p-6">
+                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Tasas Generales (Orden 68/2022)</h4>
+                            <div className="space-y-3">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600 font-medium">Servicios Generales</span>
+                                <span className="font-bold">10.00€</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600 font-medium">Apertura Expediente</span>
+                                <span className="font-bold">25.00€</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-gray-600 font-medium">Prueba de Acceso (Prof.)</span>
+                                <span className="font-bold">40.00€</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Elemental</span>
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-xs">
+                                  <span>1º y 2º</span>
+                                  <span className="font-bold">94€</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span>3º y 4º</span>
+                                  <span className="font-bold">188€</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Profesional</span>
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-xs">
+                                  <span>1º y 2º</span>
+                                  <span className="font-bold">232€</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                  <span>3º a 6º</span>
+                                  <span className="font-bold">348€</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+                            <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3">Reducciones</h4>
+                            <div className="space-y-2 text-xs text-blue-800 font-medium">
+                              <p>• Familia Numerosa General: 50% de bonificación</p>
+                              <p>• Familia Numerosa Especial: 100% de exención</p>
+                              <p>• Becarios (Solo Profesional): 100% de exención</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsFeesInfoModalOpen(false)}
+                          className="w-full mt-8 py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all"
+                        >
+                          Cerrar
+                        </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {isExemptionModalOpen && (
+                    <>
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsExemptionModalOpen(false)}
+                        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50"
+                      />
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl z-[60] border border-gray-100"
+                      >
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-xl font-bold">Reducciones y Exenciones</h3>
+                          <button type="button" onClick={() => setIsExemptionModalOpen(false)} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
+                            <Music size={20} className="rotate-45" /> {/* Using Music rotated as a cross since I don't have X icon imported yet, wait I should check lucide imports */}
+                          </button>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-3">
+                          {[
+                            { id: 'ninguna', label: 'Ninguna', desc: 'Sin reducciones aplicables', art: null },
+                            { id: 'fam_num_general', label: 'Familia Numerosa General', desc: 'Bonificación del 50% (Art. 14.b)', art: 'fam_num' },
+                            { id: 'fam_num_especial', label: 'Familia Numerosa Especial', desc: 'Exención del 100% (Art. 14.a)', art: 'fam_num' },
+                            { id: 'discapacidad', label: 'Discapacidad ≥ 33%', desc: 'Exención del 100% (Art. 15)', art: 'discapacidad' },
+                            { id: 'terrorismo', label: 'Víctima de Terrorismo', desc: 'Exención del 100% (Art. 16)', art: 'terrorismo' },
+                            { id: 'violencia_genero', label: 'Víctima de Violencia de Género', desc: 'Exención del 100% (Art. 17)', art: 'violencia_genero' },
+                            { id: 'ingreso_minimo', label: 'Ingreso Mínimo de Solidaridad', desc: 'Exención del 100% (Art. 18)', art: 'ingreso_minimo' },
+                          ].map((item) => (
+                            <div key={item.id} className="relative group">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  // Si la nueva reducción es incompatible con Matrícula de Honor, la limpiamos
+                                  const compatibleConHonor = item.id === 'ninguna' || item.id === 'fam_num_general';
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    tipoReduccion: item.id as any,
+                                    matriculaHonor: compatibleConHonor ? prev.matriculaHonor : false,
+                                  }));
+                                  setIsExemptionModalOpen(false);
+                                }}
+                                className={`w-full p-4 rounded-2xl border-2 text-left transition-all flex flex-col gap-1 pr-16 ${formData.tipoReduccion === item.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-50 bg-gray-50 hover:border-gray-200'}`}
+                              >
+                                <span className="font-bold text-sm">{item.label}</span>
+                                <span className={`text-xs ${formData.tipoReduccion === item.id ? 'text-gray-400' : 'text-gray-500'}`}>{item.desc}</span>
+                              </button>
+                              {item.art && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedArticle((ARTICLE_TEXTS as any)[item.art]);
+                                  }}
+                                  className={`absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-xl transition-all ${formData.tipoReduccion === item.id ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-white text-gray-400 hover:text-gray-900 shadow-sm'}`}
+                                >
+                                  <AlertCircle size={24} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+
+                          {/* Separador para Matrícula de Honor */}
+                          <div className="border-t border-gray-100 pt-3 mt-1">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">Bonificación adicional apilable</p>
+                            <div className="relative group">
+                              <button
+                                type="button"
+                                disabled={formData.tipoReduccion !== 'ninguna' && formData.tipoReduccion !== 'fam_num_general' && formData.tipoReduccion !== ''}
+                                onClick={() => {
+                                  setFormData(prev => ({ ...prev, matriculaHonor: !prev.matriculaHonor }));
+                                  setIsExemptionModalOpen(false);
+                                }}
+                                className={`w-full p-4 rounded-2xl border-2 text-left transition-all flex flex-col gap-1 pr-16
+                                  ${formData.matriculaHonor ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-50 bg-gray-50 hover:border-gray-200'}
+                                  ${(formData.tipoReduccion !== 'ninguna' && formData.tipoReduccion !== 'fam_num_general' && formData.tipoReduccion !== '') ? 'opacity-40 cursor-not-allowed' : ''}
+                                `}
+                              >
+                                <span className="font-bold text-sm">Matrícula de Honor</span>
+                                <span className={`text-xs ${formData.matriculaHonor ? 'text-gray-400' : 'text-gray-500'}`}>Bonificación de 58€ (1 asignatura) (Art. 13)</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedArticle(ARTICLE_TEXTS.matricula_honor);
+                                }}
+                                className={`absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-xl transition-all ${formData.matriculaHonor ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-white text-gray-400 hover:text-gray-900 shadow-sm'}`}
+                              >
+                                <AlertCircle size={24} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Aviso documentación acreditativa */}
+                        {formData.tipoReduccion !== 'ninguna' && formData.tipoReduccion !== '' && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 6 }}
+                            className="mt-4 rounded-2xl bg-amber-50 border border-amber-200 p-4 flex gap-3"
+                          >
+                            <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-800 leading-relaxed">
+                              Será necesario <strong>adjuntar documentación acreditativa</strong> de la circunstancia que justifique la Reducción o Exención. Hasta que no se aporte, la tramitación de la Solicitud de Matrícula quedará <strong>en suspenso</strong> y, transcurrido el plazo de matrícula sin haber aportado dicha documentación, su solicitud quedará <strong>desestimada</strong>.
+                            </p>
+                          </motion.div>
+                        )}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {selectedArticle && (
+                    <>
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setSelectedArticle(null)}
+                        className="fixed inset-0 bg-black/40 backdrop-blur-md z-[70]"
+                      />
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl z-[80] border border-gray-100"
+                      >
+                        <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
+                          <div className="p-2 bg-gray-900 text-white rounded-lg">
+                            <FileText size={20} />
+                          </div>
+                          <h3 className="text-lg font-bold leading-tight">{selectedArticle.title}</h3>
+                        </div>
+                        <div className="bg-gray-50 rounded-2xl p-6 mb-6">
+                          <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap italic">
+                            "{selectedArticle.text}"
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedArticle(null)}
+                          className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all"
+                        >
+                          Entendido
+                        </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {showValidationModal && (
+                    <>
+                      <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowValidationModal(false)}
+                        className="fixed inset-0 bg-black/40 backdrop-blur-md z-[120]"
+                      />
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl z-[130] border border-red-100"
+                      >
+                        <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
+                          <div className="p-2 bg-red-100 text-red-600 rounded-lg">
+                            <AlertCircle size={24} />
+                          </div>
+                          <h3 className="text-xl font-bold text-gray-900">Campos Obligatorios</h3>
+                        </div>
+                        
+                        <div className="bg-red-50 rounded-2xl p-6 mb-6">
+                          <p className="text-sm text-red-800 font-medium mb-3">
+                            Por favor, complete los siguientes campos para continuar:
+                          </p>
+                          <ul className="space-y-2">
+                            {validationErrors.map((error, index) => (
+                              <li key={index} className="text-sm text-red-700 flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 bg-red-400 rounded-full" />
+                                {error.label}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleValidationClose}
+                          className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
+                        >
+                          Entendido
+                        </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {isAperturaWarningOpen && (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsAperturaWarningOpen(false)}
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
+                      />
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-10 shadow-2xl z-[110] border border-red-100"
+                      >
+                        <div className="flex items-center gap-4 mb-8">
+                          <div className="p-3 bg-red-50 text-red-600 rounded-2xl">
+                            <AlertCircle size={32} />
+                          </div>
+                          <div>
+                            <h3 className="text-2xl font-black text-gray-900 leading-tight">¿Seguro que no debe abonar la apertura de expediente?</h3>
+                            <p className="text-sm text-gray-500 font-medium uppercase tracking-wider mt-1">Verificación de normativa vigente</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-gray-50 rounded-3xl p-8 mb-8 border border-gray-100">
+                          <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                            <FileText size={14} />
+                            Texto Literal de la Normativa
+                          </h4>
+                          <p className="text-base text-gray-700 leading-relaxed italic font-serif">
+                            "{ARTICLE_TEXTS.apertura_expediente.text}"
+                          </p>
+                          <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Orden 68/2022, de 21 de marzo</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Consejería de Educación</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setIsAperturaWarningOpen(false)}
+                            className="w-full py-5 bg-gray-900 text-white rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
+                          >
+                            Sí, estoy seguro
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsAperturaWarningOpen(false);
+                              setFormData(prev => ({ ...prev, esPrimerAno: true }));
+                            }}
+                            className="w-full py-5 bg-white text-gray-900 border-2 border-gray-100 rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-gray-50 transition-all"
+                          >
+                            No, incluir apertura (25€)
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 mb-8">
+              <div className="relative group">
+                <label className="flex items-center gap-3 cursor-pointer p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all pr-16">
+                  <input 
+                    type="checkbox" 
+                    name="esPrimerAno" 
+                    checked={formData.esPrimerAno}
+                    onChange={handleChange}
+                    className="w-5 h-5 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-gray-700">Primer año en el centro o Primer año en Profesional</span>
+                    <span className="text-[10px] text-[#666666] uppercase font-bold tracking-wider">Apertura de expediente (25€). Se abona la primera vez que te matriculas en cada enseñanza o especialidad.</span>
+                  </div>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setSelectedArticle(ARTICLE_TEXTS.apertura_expediente)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white text-gray-400 hover:text-gray-900 rounded-xl shadow-sm transition-all"
+                  title="Ver normativa sobre apertura de expediente"
+                >
+                  <AlertCircle size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                { id: 'unico', label: 'Opción 1', title: 'Pago Único', desc: 'Total a ingresar en un solo pago' },
+                { id: 'fraccionado', label: 'Opción 2', title: 'Pago Fraccionado', desc: 'Dos pagos (1er y 2º plazo)' },
+                { id: 'beca', label: 'Opción 3', title: 'Solicita Beca', desc: 'Debe aportar el justificante de registro de la beca para el centro' },
+              ].filter(opcion => !(formData.tipoEnsenanza === 'elemental' && opcion.id === 'beca')).map((opcion) => (
+                <label key={opcion.id} className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col gap-2 ${formData.formaPago === opcion.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                  <input type="radio" name="formaPago" value={opcion.id} checked={formData.formaPago === opcion.id} onChange={handleChange} className="sr-only" />
+                  <span className={`text-[10px] font-bold uppercase tracking-widest ${formData.formaPago === opcion.id ? 'text-gray-400' : 'text-gray-400'}`}>{opcion.label}</span>
+                  <span className="font-bold text-lg">{opcion.title}</span>
+                  <span className={`text-xs leading-relaxed ${formData.formaPago === opcion.id ? 'text-gray-300' : 'text-gray-500'}`}>{opcion.desc}</span>
+                </label>
+              ))}
+            </div>
+
+            <AnimatePresence>
+              {formData.formaPago === 'beca' && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-6 p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-start gap-3"
+                >
+                  <AlertCircle size={20} className="text-blue-600 mt-0.5 shrink-0" />
+                  <p className="text-sm text-blue-800 font-medium leading-relaxed">
+                    Debe aportar el justificante de registro de la beca para el centro.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {calculation && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="mt-8 overflow-hidden"
+                >
+                  <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Desglose de Tasas</h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Servicios Generales</span>
+                        <span className="font-medium">{calculation.details.serviciosGenerales.toFixed(2)}€</span>
+                      </div>
+                      {formData.esPrimerAno && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Apertura de Expediente</span>
+                          <span className="font-medium">{calculation.details.aperturaExpediente.toFixed(2)}€</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Matrícula Curso ({formData.curso})</span>
+                        <span className="font-medium">{calculation.details.curso.toFixed(2)}€</span>
+                      </div>
+                      {calculation.details.asignaturasPendientes > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Asignaturas Pendientes</span>
+                          <span className="font-medium">{calculation.details.asignaturasPendientes.toFixed(2)}€</span>
+                        </div>
+                      )}
+                      {calculation.details.matriculaHonorDiscount > 0 && (
+                        <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
+                          <span>Matrícula de Honor (Art. 13)</span>
+                          <span>-{calculation.details.matriculaHonorDiscount.toFixed(2)}€</span>
+                        </div>
+                      )}
+                      {calculation.details.multiplier < 1 && (
+                        <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
+                          <span>Reducción aplicada</span>
+                          <span>-{((1 - calculation.details.multiplier) * 100).toFixed(0)}%</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+              {formData.formaPago && formData.formaPago !== 'beca' && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-50"
+                >
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Importe Total (€)</label>
+                    <input name="importeTotal" value={formData.importeTotal} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="0.00" />
+                  </div>
+                  {formData.formaPago === 'fraccionado' && (
+                    <>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Importe 1er Pago (€)</label>
+                        <input name="importe1erPago" value={formData.importe1erPago} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="0.00" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Importe 2º Pago (€)</label>
+                        <input name="importe2oPago" value={formData.importe2oPago} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="0.00" />
+                        <p className="text-[10px] text-amber-600 font-bold uppercase tracking-wider mt-2 leading-relaxed">
+                          El segundo pago debe realizarse en la primera semana de diciembre, enviando el justificante al correo electrónico del conservatorio.
+                        </p>
+                      </div>
+                    </>
+                  )}
+                  {viewMode !== 'readonly' && (
+                    <>
+                      <div className="md:col-span-2 flex items-center gap-3 mt-2">
+                        <a
+                          href="https://modelos-tributos.jccm.es/webgreco/modelos/jsp/cumplimentacion/GreJspModelo046_2012_P.jsp"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-modelo046"
+                        >
+                          Modelo 046
+                          <div className="arrow-wrapper">
+                            <div className="arrow"></div>
+                          </div>
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => setIsModelo046InfoOpen(true)}
+                          className="p-1.5 text-gray-400 hover:text-gray-900 transition-colors"
+                          title="Instrucciones para cumplimentar el Modelo 046"
+                        >
+                          <AlertCircle size={20} />
+                        </button>
+                      </div>
+                      {formData.importeTotal && parseFloat(formData.importeTotal) > 0 && (
+                        <div className="md:col-span-2 mt-3 rounded-2xl bg-amber-50 border border-amber-200 p-4 flex gap-3">
+                          <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                          <p className="text-xs text-amber-800 leading-relaxed">
+                            Será necesario adjuntar documentación acreditativa el pago de la tasa, con <strong>justificante del pago</strong> (no es válido copia de la autoliquidación). Hasta que no se aporte, la tramitación de la Solicitud de Matrícula quedará <strong>en suspenso</strong> y, transcurrido el plazo de matrícula sin haber aportado dicha documentación, su solicitud quedará <strong>desestimada</strong>.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+                  {isModelo046InfoOpen && (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsModelo046InfoOpen(false)}
+                        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[120]"
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl z-[130] border border-gray-100"
+                      >
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gray-900 text-white rounded-lg">
+                              <AlertCircle size={20} />
+                            </div>
+                            <h3 className="text-xl font-bold">Modelo 046</h3>
+                          </div>
+                          <button type="button" onClick={() => setIsModelo046InfoOpen(false)} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
+                            <Music size={20} className="rotate-45" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          <p className="text-sm font-bold text-gray-700 uppercase tracking-widest text-[11px]">Instrucciones para la cumplimentación del modelo 046</p>
+                          <ul className="space-y-3 text-sm text-gray-700 leading-relaxed">
+                            <li className="flex gap-2">
+                              <span className="text-gray-400 shrink-0">–</span>
+                              <span><strong>Consejería u Organismo Autónomo:</strong> CONSEJERÍA DE EDUCACIÓN, CULTURA Y DEPORTES</span>
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-gray-400 shrink-0">–</span>
+                              <span><strong>Órgano Gestor:</strong> DELG. PROV. DE EDUCACIÓN, CULTURA Y DEP. CIUDAD REAL.</span>
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-gray-400 shrink-0">–</span>
+                              <span><strong>Denominación del Concepto:</strong> 2032 – PRECIO PÚBLICO DE ENSEÑANZAS DE IDIOMAS, MÚSICA, DANZA Y DISEÑO.</span>
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-gray-400 shrink-0">–</span>
+                              <span>Hacer CLIC en el botón <strong>"CUMPLIMENTAR el MODELO 046"</strong>.</span>
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-gray-400 shrink-0">–</span>
+                              <span>En la nueva ventana ingresar los datos solicitados (fecha de devengo, datos personales del pagador).</span>
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-gray-400 shrink-0">–</span>
+                              <span><strong>Descripción:</strong> Enseñanzas Elementales o Profesionales de Música, especialidad y curso. También se hará constar si tiene algún tipo de bonificación o exención.</span>
+                            </li>
+                          </ul>
+                        </div>
+
+                        <div className="mt-8 flex flex-col gap-3">
+                          <a
+                            href="https://portaltributario.jccm.es/sites/portaltributario.castillalamancha.es/files/instrucciones/i-046_2026_01_12.pdf"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full py-3 px-4 bg-gray-50 border border-gray-200 text-gray-700 rounded-xl font-bold text-sm text-center hover:bg-gray-100 transition-all flex items-center justify-center gap-2"
+                          >
+                            <FileText size={16} />
+                            Más información en PDF
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setIsModelo046InfoOpen(false)}
+                            className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all"
+                          >
+                            Cerrar
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+          </section>
+
+          {/* Información Legal */}
+          <section className="bg-gray-900 text-white rounded-[2rem] p-8 shadow-sm">
+            {viewMode !== 'readonly' && (
+              <>
+                <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
+                  <FileText size={20} className="text-gray-400" />
+                  <h2 className="text-base sm:text-xl font-semibold">Información y Autorización</h2>
+                </div>
+                <div className="space-y-4 text-sm text-gray-300 leading-relaxed max-h-48 overflow-y-auto pr-4 custom-scrollbar">
+                  <p className="font-bold text-white uppercase text-xs tracking-widest mb-2">Autorización para la publicación de imágenes</p>
+                  <p>
+                    Con la inclusión de las nuevas tecnologías dentro de los medios didácticos al alcance de la Comunidad Escolar, existe la posibilidad de que en éstos puedan aparecer imágenes del solicitante /sus hijos/as (en el caso de menores de edad) durante la realización de actividades escolares.
+                  </p>
+                  <p>
+                    Dado que el derecho a la propia imagen está reconocido en el artículo 18 de la Constitución y regulado por la Ley 1/1982, de 5 de mayo, sobre el derecho al honor, a la intimidad personal y familiar y la propia imagen, y la Ley 15/1999, de 13 de diciembre, sobre la Protección de Datos de Carácter Personal, la Dirección de este Conservatorio pide el consentimiento a los interesados o a los padres para poder publicar imágenes y/o grabaciones audiovisuales con carácter pedagógico y divulgativo.
+                  </p>
+                  <p className="font-bold text-white uppercase text-xs tracking-widest mt-4 mb-2">Protección de Datos</p>
+                  <p>
+                    En cumplimiento de lo dispuesto en la Ley Orgánica 15/1999, de 13 de diciembre, de Protección de Datos de Carácter Personal, se le informa que los datos personales obtenidos mediante este formulario serán incorporados al fichero de la aplicación de gestión académica. Puede ejercitar sus derechos de acceso, rectificación, cancelación y oposición dirigiendo un escrito a la Consejería competente en educación de la Junta de Comunidades de Castilla-La Mancha.
+                  </p>
+                </div>
+              </>
+            )}
+            <div className={viewMode !== 'readonly' ? 'mt-8 p-4 bg-white/5 rounded-2xl border border-white/10' : 'p-4 bg-white/5 rounded-2xl border border-white/10'}>
+              <p className="text-xs text-gray-400 mb-6 italic">
+                DECLARACIÓN: La persona abajo firmante DECLARA, bajo su expresa responsabilidad, que son ciertos los datos que figuran en la presente solicitud, así como en la documentación que se acompaña.
+              </p>
+
+              {viewMode === 'readonly' && attachments.length > 0 && (
+                <div className="mb-6 pb-6 border-b border-white/10">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-gray-300 mb-3">
+                    <Paperclip size={18} className="text-gray-400" />
+                    Documentos Adjuntos
+                  </p>
+                  <div className="space-y-2">
+                    {attachments.map((file, index) => (
+                      <div key={index} className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/10">
+                        <FileText size={16} className="text-gray-400 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm text-gray-300 truncate">{file.name}</p>
+                          <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {viewMode !== 'readonly' && (
+                <>
+                  {/* File Attachment Section */}
+                  <div className="mb-6 pb-6 border-b border-white/10">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-300 mb-4 cursor-pointer">
+                      <Paperclip size={18} className="text-gray-400" />
+                      Documentos Adjuntos (Opcional)
+                    </label>
+                    <p className="text-xs text-gray-400 mb-4">Se aceptan archivos de imagen (JPG, PNG, etc.) y PDF</p>
+
+                    <input
+                      type="file"
+                      id="file-input"
+                      multiple
+                      accept="image/*,.pdf"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('file-input')?.click()}
+                      className="w-full py-3 px-4 border-2 border-dashed border-gray-400 rounded-xl text-gray-300 hover:border-white hover:text-white transition-all flex items-center justify-center gap-2 mb-4"
+                    >
+                      <Paperclip size={18} />
+                      Adjuntar Archivos
+                    </button>
+
+                    {/* Attachments List */}
+                    {attachments.length > 0 && (
+                      <div className="space-y-2">
+                        {attachments.map((file, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <FileText size={16} className="text-gray-400 flex-shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-sm text-gray-300 truncate">{file.name}</p>
+                                <p className="text-xs text-gray-500">
+                                  {(file.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAttachment(index)}
+                              className="flex-shrink-0 p-1 hover:bg-red-500/20 rounded text-red-400 hover:text-red-300 transition-all"
+                            >
+                              <X size={18} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full py-4 bg-white text-gray-900 rounded-xl font-bold uppercase tracking-widest hover:bg-gray-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      'Vista Previa al Envío'
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
+          </section>
+        </form>
+        </div>
+
+        {submitStatus === 'error' && (
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6 p-4 bg-red-50 text-red-600 rounded-2xl flex items-center gap-3 border border-red-100"
+          >
+            <AlertCircle size={20} />
+            <p className="text-sm font-medium">Hubo un error al enviar el formulario. Por favor, inténtalo de nuevo.</p>
+          </motion.div>
+        )}
+
+        <footer className="mt-12 text-center text-gray-400 text-xs pb-12">
+          <p>© 2026 Conservatorio Profesional de Música "Marcos Redondo" - Ciudad Real</p>
+          <p className="mt-1">Sistema de Matriculación Digital</p>
+        </footer>
+      </div>
+
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+      `}</style>
+
+      {/* ── Panel de administración oculto (F10 × 2) ─────────────────────── */}
+      <AnimatePresence>
+        {isAdminOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+            onClick={e => { if (e.target === e.currentTarget) setIsAdminOpen(false); }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-gray-900 text-white rounded-2xl shadow-2xl w-full max-w-lg p-6"
+            >
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                  <div className="w-2 h-2 rounded-full bg-yellow-400" />
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  <span className="ml-2 text-sm font-mono text-gray-400">Panel de Administración</span>
+                </div>
+                <button onClick={() => setIsAdminOpen(false)} className="text-gray-500 hover:text-white transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1 uppercase tracking-wider">
+                    URL Flow 1 — Crear registro (devuelve rowId)
+                  </label>
+                  <textarea
+                    value={adminUrlInput}
+                    onChange={e => { setAdminUrlInput(e.target.value); setAdminSaveStatus('idle'); }}
+                    rows={4}
+                    className="w-full bg-gray-800 text-gray-100 text-xs font-mono rounded-lg p-3 border border-gray-700 focus:outline-none focus:border-blue-500 resize-none"
+                    placeholder="https://prod-XX.westeurope.logic.azure.com/..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-mono text-gray-400 mb-1 uppercase tracking-wider">
+                    URL Flow 2 — Subir PDF (recibe rowId + Base64)
+                  </label>
+                  <textarea
+                    value={adminUrlPdfInput}
+                    onChange={e => { setAdminUrlPdfInput(e.target.value); setAdminSaveStatus('idle'); }}
+                    rows={4}
+                    className="w-full bg-gray-800 text-gray-100 text-xs font-mono rounded-lg p-3 border border-gray-700 focus:outline-none focus:border-blue-500 resize-none"
+                    placeholder="https://prod-XX.westeurope.logic.azure.com/..."
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Los cambios se guardan en Supabase y se aplican a todos los usuarios inmediatamente.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleAdminSave}
+                    disabled={adminSaving || (!adminUrlInput && !adminUrlPdfInput)}
+                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    {adminSaving ? 'Guardando…' : 'Guardar URLs'}
+                  </button>
+                  <button
+                    onClick={() => setIsAdminOpen(false)}
+                    className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+
+                {adminSaveStatus === 'success' && (
+                  <div className="flex items-center gap-2 text-green-400 text-sm">
+                    <CheckCircle2 size={16} />
+                    <span>URL actualizada correctamente para todos los usuarios.</span>
+                  </div>
+                )}
+                {adminSaveStatus === 'error' && (
+                  <div className="flex items-center gap-2 text-red-400 text-sm">
+                    <AlertCircle size={16} />
+                    <span>Error al guardar. Comprueba la conexión con Supabase.</span>
+                  </div>
+                )}
+
+                {supabaseError && (
+                  <div className="pt-3 border-t border-red-900/40 space-y-2">
+                    <div className="flex items-center gap-2 text-red-400 text-xs font-mono font-semibold">
+                      <AlertCircle size={14} />
+                      <span>Supabase no responde — usando URL del .env</span>
+                    </div>
+                    <div className="bg-gray-800 rounded-lg p-3 text-[11px] text-gray-300 space-y-2 leading-relaxed">
+                      {supabaseError === 'missing_env' ? (
+                        <>
+                          <p className="text-yellow-400 font-semibold">Variables de entorno no configuradas</p>
+                          <p>El archivo <code className="text-blue-300">.env.local</code> no tiene las claves de Supabase. Añade:</p>
+                          <pre className="bg-gray-900 rounded p-2 text-[10px] text-green-300 overflow-x-auto">{`VITE_SUPABASE_URL=https://ujsagesnwajqhyyafyls.supabase.co\nVITE_SUPABASE_ANON_KEY=eyJhbGci...`}</pre>
+                          <p>Después haz <code className="text-blue-300">npm run build</code> y vuelve a subir el sitio.</p>
+                        </>
+                      ) : supabaseError === 'empty_table' ? (
+                        <>
+                          <p className="text-yellow-400 font-semibold">La tabla <code>config</code> está vacía</p>
+                          <p>Ve a <span className="text-blue-300">supabase.com → proyecto cpmMarcoRedondo → Table Editor → config</span> e inserta una fila:</p>
+                          <pre className="bg-gray-900 rounded p-2 text-[10px] text-green-300 overflow-x-auto">{`key:   power_automate_url\nvalue: (pega aquí la URL de Power Automate)`}</pre>
+                          <p>Después recarga la página.</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-yellow-400 font-semibold">Error de conexión: <code>{supabaseError}</code></p>
+                          <p>Posibles causas y soluciones:</p>
+                          <ol className="list-decimal list-inside space-y-1 text-gray-400">
+                            <li>El proyecto Supabase está en pausa → entra en <span className="text-blue-300">supabase.com</span>, abre <span className="text-blue-300">cpmMarcoRedondo</span> y pulsa <strong className="text-white">Restore project</strong>.</li>
+                            <li>Las políticas RLS no permiten lectura pública → en el <span className="text-blue-300">SQL Editor</span> ejecuta:<br />
+                              <pre className="bg-gray-900 rounded p-2 mt-1 text-[10px] text-green-300 overflow-x-auto">{`CREATE POLICY "public read" ON config\nFOR SELECT USING (true);`}</pre>
+                            </li>
+                            <li>La anon key ha cambiado → cópiala desde <span className="text-blue-300">Project Settings → API</span> y actualiza <code>.env.local</code> + haz rebuild.</li>
+                          </ol>
+                          <p className="text-gray-500 mt-1">Tras corregirlo, recarga la página.</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-gray-800 space-y-1">
+                  <p className="text-[10px] font-mono text-gray-600">
+                    Flow 1 activo: {powerAutomateUrl ? powerAutomateUrl.slice(0, 55) + '…' : '(no configurado)'}
+                  </p>
+                  <p className="text-[10px] font-mono text-gray-600">
+                    Flow 2 activo: {powerAutomateUrlPdf ? powerAutomateUrlPdf.slice(0, 55) + '…' : '(no configurado)'}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
