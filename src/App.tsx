@@ -209,7 +209,7 @@ export default function App() {
   }, [calculation]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error' | 'duplicate'>('idle');
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
 
@@ -656,10 +656,16 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(jsonPayload),
         });
+        if (res1.status === 409) {
+          setSubmitStatus('duplicate');
+          setIsSubmitting(false);
+          return;
+        }
         if (!res1.ok) throw new Error(`Error al crear el registro (HTTP ${res1.status})`);
 
         const data1 = await res1.json();
         const rowId: string = data1?.rowId;
+        const nOrden: number | undefined = data1?.nOrden;
         if (!rowId) throw new Error('No se recibió rowId del servidor');
 
         // ── Llamada 2: subir el PDF en Base64 ────────────────────────────
@@ -684,6 +690,7 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             rowId,
+            nOrden,
             fileName: filename,
             mimeType: 'application/pdf',
             contentBase64: uint8ToBase64(pdfBytes),
@@ -691,6 +698,14 @@ export default function App() {
             nombre:               formData.nombre,
             apellidos:            formData.apellidos,
             email:                formData.email,
+            dni:                  formData.dni,
+            fechaNacimiento:      formData.fechaNacimiento,
+            domicilio:            formData.domicilio,
+            localidad:            formData.localidad,
+            provincia:            formData.provincia,
+            codigoPostal:         formData.codigoPostal,
+            telefono:             formData.telefono,
+            horaSalidaEstudios:   formData.horaSalidaEstudios,
             tipoCurso:            `${formData.tipoEnsenanza === 'elemental' ? 'Enseñanza Elemental' : 'Enseñanza Profesional'} — ${formData.curso}`,
             especialidad:         formData.especialidad,
             asignaturaPendiente1: selectedPendingSubjects[0]?.label || formData.asignaturaPendiente1 || '',
@@ -701,6 +716,13 @@ export default function App() {
             importeTotal:         formData.importeTotal ? `${formData.importeTotal} EUR` : '',
             importe1erPago:       formData.importe1erPago ? `${formData.importe1erPago} EUR` : '',
             importe2oPago:        formData.importe2oPago ? `${formData.importe2oPago} EUR` : '',
+            // Asignaturas para Dataverse cr955_matriculaasignatura
+            asignaturasCursoActual: JSON.stringify(asignaturasCursoActual),
+            asignaturasPendientes:  JSON.stringify(
+              selectedPendingSubjects
+                .map(s => materias.find(m => m.MATERIA === s.id))
+                .filter(Boolean)
+            ),
           }),
         });
         if (!res2.ok) throw new Error(`Error al subir el PDF (HTTP ${res2.status})`);
@@ -1932,13 +1954,30 @@ export default function App() {
         </div>
 
         {submitStatus === 'error' && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className="mt-6 p-4 bg-red-50 text-red-600 rounded-2xl flex items-center gap-3 border border-red-100"
           >
             <AlertCircle size={20} />
             <p className="text-sm font-medium">Hubo un error al enviar el formulario. Por favor, inténtalo de nuevo.</p>
+          </motion.div>
+        )}
+
+        {submitStatus === 'duplicate' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-6 p-4 bg-amber-50 text-amber-800 rounded-2xl flex items-start gap-3 border border-amber-200"
+          >
+            <AlertCircle size={20} className="mt-0.5 flex-shrink-0" />
+            <div className="text-sm">
+              <p className="font-semibold mb-1">Ya existe una solicitud de matrícula para este DNI, especialidad y curso.</p>
+              <p>
+                Si necesitas modificarla, contacta con la Secretaría del Conservatorio:<br />
+                📞 <b>926 274 154</b> &nbsp;|&nbsp; ✉️ <a href="mailto:13004341.cpm@educastillalamancha.es" className="underline">13004341.cpm@educastillalamancha.es</a>
+              </p>
+            </div>
           </motion.div>
         )}
 
