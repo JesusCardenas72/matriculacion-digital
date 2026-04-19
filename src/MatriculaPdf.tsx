@@ -26,6 +26,7 @@ export interface MatriculaPdfProps {
   asignaturasCursoActual: CurrentSubject[];
   selectedPendingSubjects: PendingSubject[];
   calculation: CalcResult;
+  requestNumber?: string;
 }
 
 const C = {
@@ -76,7 +77,7 @@ const DesgloseRow = ({ label, value, highlight, discount }: { label: string; val
   </View>
 );
 
-export const MatriculaPdf = ({ formData, academicYear, submitTimestamp, asignaturasCursoActual, selectedPendingSubjects, calculation }: MatriculaPdfProps) => {
+export const MatriculaPdf = ({ formData, academicYear, submitTimestamp, asignaturasCursoActual, selectedPendingSubjects, calculation, requestNumber }: MatriculaPdfProps) => {
   const fechaFmt = formData.fechaNacimiento ? new Date(formData.fechaNacimiento + 'T12:00:00').toLocaleDateString('es-ES') : '';
 
   const perfilLabel =
@@ -103,6 +104,13 @@ export const MatriculaPdf = ({ formData, academicYear, submitTimestamp, asignatu
           </View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
             <Image src={logoCpm} style={{ height: 30 }} />
+            {requestNumber && (
+              <View style={{ backgroundColor: C.gray900, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                  N.º {requestNumber}
+                </Text>
+              </View>
+            )}
             <View style={{ backgroundColor: '#F97316', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 }}>
               <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>
                 Enviado: {submitTimestamp.toLocaleDateString('es-ES')}{' '}

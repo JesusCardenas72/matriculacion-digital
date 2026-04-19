@@ -213,107 +213,18 @@ export default function App() {
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
 
-  // ── Supabase config ────────────────────────────────────────────────────────
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+  // ── Power Automate URLs (hardcoded en el código, editables en src/App.tsx) ──
+  const POWER_AUTOMATE_URL_DUPLICADOS =
+    'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b62c3d4b21d24bda8daa75a8586198eb/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=4nqPljifCY1CBxAiKj03La2YEksNn78meKn9-nlXGCk';
+  const POWER_AUTOMATE_URL =
+    'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ec7a2a1c67974d32ba23de811d20e93d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3G39Rx3ZC55SKVIoBGvRufw-d6J6fYl74GOi46We9f0';
+  const POWER_AUTOMATE_URL_PDF =
+    'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b31521c981d04d95a8a6917a899f3988/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=i6YvgMW9GNJO-1Ynz0A3hAiNPGvZVpXkzbsdoeBYsfU';
 
-  const [powerAutomateUrl, setPowerAutomateUrl] = useState<string>(
-    import.meta.env.VITE_POWER_AUTOMATE_URL || ''
-  );
-  const [powerAutomateUrlPdf, setPowerAutomateUrlPdf] = useState<string>(
-    import.meta.env.VITE_POWER_AUTOMATE_URL_PDF || ''
-  );
-
-  // Carga las URLs desde Supabase al montar (tienen prioridad sobre .env)
-  const [supabaseError, setSupabaseError] = useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-      setSupabaseError('missing_env');
-      return;
-    }
-    const headers = {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    };
-    Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.power_automate_url&select=value`, { headers }),
-      fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.power_automate_url_pdf&select=value`, { headers }),
-    ])
-      .then(async ([r1, r2]) => {
-        if (!r1.ok) throw new Error(`HTTP ${r1.status}`);
-        const [rows1, rows2]: [{ value: string }[], { value: string }[]] = await Promise.all([r1.json(), r2.json()]);
-        if (rows1?.[0]?.value) {
-          setPowerAutomateUrl(rows1[0].value);
-          setSupabaseError(null);
-        } else {
-          setSupabaseError('empty_table');
-        }
-        if (rows2?.[0]?.value) setPowerAutomateUrlPdf(rows2[0].value);
-      })
-      .catch((e: Error) => {
-        console.error(e);
-        setSupabaseError(e.message || 'fetch_error');
-      });
-  }, []);
-
-  // ── Menú oculto: F10 × 2 en menos de 600 ms ───────────────────────────────
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [adminUrlInput, setAdminUrlInput] = useState('');
-  const [adminUrlPdfInput, setAdminUrlPdfInput] = useState('');
-  const [adminSaving, setAdminSaving] = useState(false);
-  const [adminSaveStatus, setAdminSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const lastF10Ref = React.useRef<number>(0);
-
-  React.useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'F10') return;
-      e.preventDefault();
-      const now = Date.now();
-      if (now - lastF10Ref.current < 600) {
-        setAdminUrlInput(powerAutomateUrl);
-        setAdminUrlPdfInput(powerAutomateUrlPdf);
-        setAdminSaveStatus('idle');
-        setIsAdminOpen(true);
-      }
-      lastF10Ref.current = now;
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [powerAutomateUrl, powerAutomateUrlPdf]);
-
-  const handleAdminSave = async () => {
-    setAdminSaving(true);
-    setAdminSaveStatus('idle');
-    const patchHeaders = {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    };
-    try {
-      const [res1, res2] = await Promise.all([
-        fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.power_automate_url`, {
-          method: 'PATCH',
-          headers: patchHeaders,
-          body: JSON.stringify({ value: adminUrlInput, updated_at: new Date().toISOString() }),
-        }),
-        fetch(`${SUPABASE_URL}/rest/v1/config?key=eq.power_automate_url_pdf`, {
-          method: 'PATCH',
-          headers: patchHeaders,
-          body: JSON.stringify({ value: adminUrlPdfInput, updated_at: new Date().toISOString() }),
-        }),
-      ]);
-      if (!res1.ok || !res2.ok) throw new Error();
-      setPowerAutomateUrl(adminUrlInput);
-      setPowerAutomateUrlPdf(adminUrlPdfInput);
-      setAdminSaveStatus('success');
-    } catch {
-      setAdminSaveStatus('error');
-    } finally {
-      setAdminSaving(false);
-    }
-  };
+  const powerAutomateUrl = POWER_AUTOMATE_URL;
+  const powerAutomateUrlPdf = POWER_AUTOMATE_URL_PDF;
+  const powerAutomateUrlDuplicados = POWER_AUTOMATE_URL_DUPLICADOS;
+  const [requestNumber, setRequestNumber] = useState<string | null>(null);
 
   const cursos = useMemo(() => {
     if (formData.tipoEnsenanza === 'elemental') return ['1º', '2º', '3º', '4º'];
@@ -537,7 +448,7 @@ export default function App() {
     });
 
   // ── helper: build the final merged PDF (page 1 = form, rest = attachments) ──
-  const buildPdfBytes = async (ts: Date): Promise<{ bytes: Uint8Array; filename: string }> => {
+  const buildPdfBytes = async (ts: Date, reqNum: string | null): Promise<{ bytes: Uint8Array; filename: string }> => {
     const mainBlob = await pdf(
       <MatriculaPdf
         formData={formData}
@@ -546,6 +457,7 @@ export default function App() {
         asignaturasCursoActual={asignaturasCursoActual}
         selectedPendingSubjects={selectedPendingSubjects}
         calculation={calculation}
+        requestNumber={reqNum ?? undefined}
       />
     ).toBlob();
 
@@ -602,8 +514,39 @@ export default function App() {
       const now = alreadySubmitted ? submitTimestamp : new Date();
       if (!alreadySubmitted) setSubmitTimestamp(now);
 
-      // Build the PDF (same file user will download)
-      const { bytes: pdfBytes, filename } = await buildPdfBytes(now);
+      // ── Llamada 0: pre-check Duplicados + NOrden ─────────────────────
+      let reqNum: string | null = requestNumber;
+      if (!alreadySubmitted && powerAutomateUrlDuplicados) {
+        const pre = await fetch(powerAutomateUrlDuplicados, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nombre: formData.nombre,
+            apellidos: formData.apellidos,
+            dni: formData.dni,
+            especialidad: formData.especialidad,
+            tipoEnsenanza: formData.tipoEnsenanza,
+            curso: formData.curso,
+          }),
+        });
+        if (pre.status === 409) {
+          setSubmitStatus('duplicate');
+          setIsSubmitting(false);
+          return;
+        }
+        if (!pre.ok) throw new Error(`Error en comprobación previa (HTTP ${pre.status})`);
+        const preData = await pre.json();
+        if (preData?.ok === false && preData?.reason === 'duplicate') {
+          setSubmitStatus('duplicate');
+          setIsSubmitting(false);
+          return;
+        }
+        reqNum = preData?.requestNumber ?? null;
+        setRequestNumber(reqNum);
+      }
+
+      // Build the PDF (same file user will download) — incluye N.º si reqNum existe
+      const { bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum);
 
       if (!alreadySubmitted) {
       if (!powerAutomateUrl) {
@@ -616,6 +559,7 @@ export default function App() {
         const ensenanzaCurso = ensenanzaCursoPrefix && ensenanzaCursoNum ? `${ensenanzaCursoPrefix}${ensenanzaCursoNum}` : '';
 
         const jsonPayload = {
+          requestNumber: reqNum ?? '',
           nombre: formData.nombre,
           apellidos: formData.apellidos,
           dni: formData.dni,
@@ -665,7 +609,7 @@ export default function App() {
 
         const data1 = await res1.json();
         const rowId: string = data1?.rowId;
-        const nOrden: number | undefined = data1?.nOrden;
+        const nOrden: number | string | undefined = reqNum ?? data1?.nOrden;
         if (!rowId) throw new Error('No se recibió rowId del servidor');
 
         // ── Llamada 2: subir el PDF en Base64 ────────────────────────────
@@ -691,6 +635,7 @@ export default function App() {
           body: JSON.stringify({
             rowId,
             nOrden,
+            requestNumber: reqNum ?? '',
             fileName: filename,
             mimeType: 'application/pdf',
             contentBase64: uint8ToBase64(pdfBytes),
@@ -2005,145 +1950,6 @@ export default function App() {
         }
       `}</style>
 
-      {/* ── Panel de administración oculto (F10 × 2) ─────────────────────── */}
-      <AnimatePresence>
-        {isAdminOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-            onClick={e => { if (e.target === e.currentTarget) setIsAdminOpen(false); }}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-gray-900 text-white rounded-2xl shadow-2xl w-full max-w-lg p-6"
-            >
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-red-500" />
-                  <div className="w-2 h-2 rounded-full bg-yellow-400" />
-                  <div className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="ml-2 text-sm font-mono text-gray-400">Panel de Administración</span>
-                </div>
-                <button onClick={() => setIsAdminOpen(false)} className="text-gray-500 hover:text-white transition-colors">
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-mono text-gray-400 mb-1 uppercase tracking-wider">
-                    URL Flow 1 — Crear registro (devuelve rowId)
-                  </label>
-                  <textarea
-                    value={adminUrlInput}
-                    onChange={e => { setAdminUrlInput(e.target.value); setAdminSaveStatus('idle'); }}
-                    rows={4}
-                    className="w-full bg-gray-800 text-gray-100 text-xs font-mono rounded-lg p-3 border border-gray-700 focus:outline-none focus:border-blue-500 resize-none"
-                    placeholder="https://prod-XX.westeurope.logic.azure.com/..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-mono text-gray-400 mb-1 uppercase tracking-wider">
-                    URL Flow 2 — Subir PDF (recibe rowId + Base64)
-                  </label>
-                  <textarea
-                    value={adminUrlPdfInput}
-                    onChange={e => { setAdminUrlPdfInput(e.target.value); setAdminSaveStatus('idle'); }}
-                    rows={4}
-                    className="w-full bg-gray-800 text-gray-100 text-xs font-mono rounded-lg p-3 border border-gray-700 focus:outline-none focus:border-blue-500 resize-none"
-                    placeholder="https://prod-XX.westeurope.logic.azure.com/..."
-                  />
-                  <p className="text-[10px] text-gray-500 mt-1">
-                    Los cambios se guardan en Supabase y se aplican a todos los usuarios inmediatamente.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleAdminSave}
-                    disabled={adminSaving || (!adminUrlInput && !adminUrlPdfInput)}
-                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    {adminSaving ? 'Guardando…' : 'Guardar URLs'}
-                  </button>
-                  <button
-                    onClick={() => setIsAdminOpen(false)}
-                    className="px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    Cerrar
-                  </button>
-                </div>
-
-                {adminSaveStatus === 'success' && (
-                  <div className="flex items-center gap-2 text-green-400 text-sm">
-                    <CheckCircle2 size={16} />
-                    <span>URL actualizada correctamente para todos los usuarios.</span>
-                  </div>
-                )}
-                {adminSaveStatus === 'error' && (
-                  <div className="flex items-center gap-2 text-red-400 text-sm">
-                    <AlertCircle size={16} />
-                    <span>Error al guardar. Comprueba la conexión con Supabase.</span>
-                  </div>
-                )}
-
-                {supabaseError && (
-                  <div className="pt-3 border-t border-red-900/40 space-y-2">
-                    <div className="flex items-center gap-2 text-red-400 text-xs font-mono font-semibold">
-                      <AlertCircle size={14} />
-                      <span>Supabase no responde — usando URL del .env</span>
-                    </div>
-                    <div className="bg-gray-800 rounded-lg p-3 text-[11px] text-gray-300 space-y-2 leading-relaxed">
-                      {supabaseError === 'missing_env' ? (
-                        <>
-                          <p className="text-yellow-400 font-semibold">Variables de entorno no configuradas</p>
-                          <p>El archivo <code className="text-blue-300">.env.local</code> no tiene las claves de Supabase. Añade:</p>
-                          <pre className="bg-gray-900 rounded p-2 text-[10px] text-green-300 overflow-x-auto">{`VITE_SUPABASE_URL=https://ujsagesnwajqhyyafyls.supabase.co\nVITE_SUPABASE_ANON_KEY=eyJhbGci...`}</pre>
-                          <p>Después haz <code className="text-blue-300">npm run build</code> y vuelve a subir el sitio.</p>
-                        </>
-                      ) : supabaseError === 'empty_table' ? (
-                        <>
-                          <p className="text-yellow-400 font-semibold">La tabla <code>config</code> está vacía</p>
-                          <p>Ve a <span className="text-blue-300">supabase.com → proyecto cpmMarcoRedondo → Table Editor → config</span> e inserta una fila:</p>
-                          <pre className="bg-gray-900 rounded p-2 text-[10px] text-green-300 overflow-x-auto">{`key:   power_automate_url\nvalue: (pega aquí la URL de Power Automate)`}</pre>
-                          <p>Después recarga la página.</p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-yellow-400 font-semibold">Error de conexión: <code>{supabaseError}</code></p>
-                          <p>Posibles causas y soluciones:</p>
-                          <ol className="list-decimal list-inside space-y-1 text-gray-400">
-                            <li>El proyecto Supabase está en pausa → entra en <span className="text-blue-300">supabase.com</span>, abre <span className="text-blue-300">cpmMarcoRedondo</span> y pulsa <strong className="text-white">Restore project</strong>.</li>
-                            <li>Las políticas RLS no permiten lectura pública → en el <span className="text-blue-300">SQL Editor</span> ejecuta:<br />
-                              <pre className="bg-gray-900 rounded p-2 mt-1 text-[10px] text-green-300 overflow-x-auto">{`CREATE POLICY "public read" ON config\nFOR SELECT USING (true);`}</pre>
-                            </li>
-                            <li>La anon key ha cambiado → cópiala desde <span className="text-blue-300">Project Settings → API</span> y actualiza <code>.env.local</code> + haz rebuild.</li>
-                          </ol>
-                          <p className="text-gray-500 mt-1">Tras corregirlo, recarga la página.</p>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-2 border-t border-gray-800 space-y-1">
-                  <p className="text-[10px] font-mono text-gray-600">
-                    Flow 1 activo: {powerAutomateUrl ? powerAutomateUrl.slice(0, 55) + '…' : '(no configurado)'}
-                  </p>
-                  <p className="text-[10px] font-mono text-gray-600">
-                    Flow 2 activo: {powerAutomateUrlPdf ? powerAutomateUrlPdf.slice(0, 55) + '…' : '(no configurado)'}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
