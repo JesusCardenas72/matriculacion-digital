@@ -103,14 +103,27 @@ export const MatriculaPdf = ({ formData, academicYear, submitTimestamp, asignatu
             <Text style={{ fontSize: 8, color: C.gray400 }}>C.P.M. "Marcos Redondo", Ciudad Real</Text>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
-            <Image src={logoCpm} style={{ height: 30 }} />
-            {requestNumber && (
-              <View style={{ backgroundColor: C.gray900, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>
-                  N.º {requestNumber}
-                </Text>
-              </View>
-            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Image src={logoCpm} style={{ height: 30 }} />
+              {requestNumber && (() => {
+                const parts = requestNumber.split('-');
+                const counter = parts[parts.length - 1] ?? requestNumber;
+                const yearMatch = academicYear.match(/(\d{4})\s*\/\s*(\d{4})/);
+                const cursoShort = yearMatch ? `${yearMatch[1].slice(-2)}/${yearMatch[2].slice(-2)}` : '';
+                return (
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ fontSize: 22, fontFamily: 'Helvetica-Bold', color: '#F97316', lineHeight: 1 }}>
+                      #{counter}
+                    </Text>
+                    {cursoShort && (
+                      <Text style={{ fontSize: 8, color: '#F97316', marginTop: 1 }}>
+                        Curso {cursoShort}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })()}
+            </View>
             <View style={{ backgroundColor: '#F97316', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 }}>
               <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>
                 Enviado: {submitTimestamp.toLocaleDateString('es-ES')}{' '}

@@ -220,6 +220,10 @@ export default function App() {
     'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ec7a2a1c67974d32ba23de811d20e93d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3G39Rx3ZC55SKVIoBGvRufw-d6J6fYl74GOi46We9f0';
   const POWER_AUTOMATE_URL_PDF =
     'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b31521c981d04d95a8a6917a899f3988/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=i6YvgMW9GNJO-1Ynz0A3hAiNPGvZVpXkzbsdoeBYsfU';
+  // ── Power Automate URLs (cargadas desde variables de entorno para mayor seguridad) ──
+  const POWER_AUTOMATE_URL_DUPLICADOS = import.meta.env.VITE_POWER_AUTOMATE_URL_DUPLICADOS;
+  const POWER_AUTOMATE_URL = import.meta.env.VITE_POWER_AUTOMATE_URL;
+  const POWER_AUTOMATE_URL_PDF = import.meta.env.VITE_POWER_AUTOMATE_URL_PDF;
 
   const powerAutomateUrl = POWER_AUTOMATE_URL;
   const powerAutomateUrlPdf = POWER_AUTOMATE_URL_PDF;
@@ -503,6 +507,14 @@ export default function App() {
       binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
     }
     return btoa(binary);
+  };
+
+  const handlePreviewPdf = async () => {
+    const { bytes } = await buildPdfBytes(new Date(), '#');
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
 
   const handleSendAndDownload = async () => {
@@ -1890,6 +1902,14 @@ export default function App() {
                     ) : (
                       'Vista Previa al Envío'
                     )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePreviewPdf}
+                    className="w-full mt-3 py-3 bg-transparent text-white border-2 border-white/30 rounded-xl font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                  >
+                    Previsualizar PDF
                   </button>
                 </>
               )}

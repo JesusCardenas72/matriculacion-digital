@@ -208,7 +208,7 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
     "parameters": {
       "entityName": "cpmmr_matriculas",
       "$select": "cpmmr_matriculaid",
-      "$top": 500
+      "$top": 5000
     },
     "host": {
       "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
@@ -229,7 +229,7 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
     },
     "body": {
       "ok": true,
-      "requestNumber": "@{concat('2026-2027-', string(add(length(body('Enumerar_filas_2')?['value']), 1)))}"
+      "requestNumber": "@{concat(utcNow('yyyy'), '-', string(add(int(utcNow('yyyy')), 1)), '-', string(add(length(body('Enumerar_filas_2')?['value']), 1)))}"
     }
   },
   "runAfter": {
