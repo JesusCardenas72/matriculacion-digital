@@ -292,22 +292,22 @@ export const MatriculaPdf = ({ formData, academicYear, submitTimestamp, asignatu
         <View style={s.card}>
           <Text style={s.sectionTitle}>Datos de Matriculacion</Text>
           <View style={s.row}>
-            <View style={{ flex: 1 }}><Field label="Tipo de Ensenanza" value={formData.tipoEnsenanza === 'elemental' ? 'Ensenanza Elemental' : formData.tipoEnsenanza === 'profesional' ? 'Ensenanza Profesional' : '—'} /></View>
-            <View style={{ width: 60 }}><Field label="Curso" value={formData.curso} /></View>
+            <View style={{ flex: 1.6 }}><Field label="Tipo de Ensenanza" value={formData.tipoEnsenanza === 'elemental' ? 'Ensenanza Elemental' : formData.tipoEnsenanza === 'profesional' ? 'Ensenanza Profesional' : '—'} /></View>
+            <View style={{ width: 42 }}><Field label="Curso" value={formData.curso} /></View>
             <View style={{ flex: 1.4 }}><Field label="Especialidad" value={formData.especialidad} /></View>
-            {formData.asignaturaPendiente1 && (
-              <View style={{ flex: 1.4 }}><Field label="Asignatura Pendiente 1" value={selectedPendingSubjects[0]?.label || formData.asignaturaPendiente1} /></View>
-            )}
-            {formData.tipoEnsenanza === 'profesional' && formData.asignaturaPendiente2 && (
-              <View style={{ flex: 1.4 }}><Field label="Asignatura Pendiente 2" value={selectedPendingSubjects[1]?.label || formData.asignaturaPendiente2} /></View>
-            )}
-          </View>
-          {showPerfil && (
-            <View style={{ backgroundColor: C.gray900, borderRadius: 6, padding: 8, marginTop: 4, marginBottom: 4 }}>
-              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray400, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 1 }}>Perfil Elegido</Text>
-              <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>Perfil {formData.perfilProfesional} — {perfilLabel}</Text>
+            <View style={{ flex: 1.4 }}>
+              {showPerfil ? (
+                <>
+                  <Text style={s.fieldLabel}>Perfil Elegido</Text>
+                  <View style={{ backgroundColor: C.gray900, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: C.white }}>
+                      Perfil {formData.perfilProfesional} — {perfilLabel}
+                    </Text>
+                  </View>
+                </>
+              ) : null}
             </View>
-          )}
+          </View>
           {(() => {
             const convAsigs = formData.convalidacionAsignaturas ?? [];
             type SubjectRow = { group: 1 | 2 | 3; key: string; code: string; name: string; tipo: 'matriculada' | 'perfil' | 'pendiente' };
