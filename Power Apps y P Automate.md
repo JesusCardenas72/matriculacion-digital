@@ -655,249 +655,144 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
 
 1.Request (trigger)
 {
-
-&#x20; "type": "Request",
-
-&#x20; "kind": "Http",
-
-&#x20; "inputs": {
-
-&#x20;   "triggerAuthenticationType": "All",
-
-&#x20;   "schema": {
-
-&#x20;     "type": "object",
-
-&#x20;     "properties": {
-
-&#x20;       "nombre": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "apellidos": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "dni": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "fechaNacimiento": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "domicilio": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "localidad": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "provincia": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "codigoPostal": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "email": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "telefono": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "horaSalidaEstudios": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "disponibilidadManana": {
-
-&#x20;         "type": "boolean"
-
-&#x20;       },
-
-&#x20;       "autorizacionImagen": {
-
-&#x20;         "type": "boolean"
-
-&#x20;       },
-
-&#x20;       "tutor1Nombre": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "tutor1Dni": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "tutor2Nombre": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "tutor2Dni": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "tipoEnsenanza": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "curso": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "ensenanzaCurso": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "especialidad": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "asignaturaPendiente1": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "asignaturaPendiente2": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "perfilProfesional": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "formaPago": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "familiaNumerosa": {
-
-&#x20;         "type": "boolean"
-
-&#x20;       },
-
-&#x20;       "tipoReduccion": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "convalidacionSolicitada": {
-
-&#x20;         "type": "boolean"
-
-&#x20;       },
-
-&#x20;       "convalidacionAsignaturas": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "matriculaHonor": {
-
-&#x20;         "type": "boolean"
-
-&#x20;       },
-
-&#x20;       "esPrimerAno": {
-
-&#x20;         "type": "boolean"
-
-&#x20;       },
-
-&#x20;       "importeTotal": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "importe1erPago": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "importe2oPago": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "nOrden": {
-
-&#x20;         "type": "string"
-
-&#x20;       },
-
-&#x20;       "estado": {
-
-&#x20;         "type": "string"
-
-&#x20;       }
-
-&#x20;     }
-
-&#x20;   }
-
-&#x20; },
-
-&#x20; "metadata": {
-
-&#x20;   "operationMetadataId": "2f12d8a8-58b3-498c-a670-d204086f3451"
-
-&#x20; }
-
+  "type": "Request",
+  "kind": "Http",
+  "inputs": {
+    "triggerAuthenticationType": "All",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "nombre": {
+          "type": "string"
+        },
+        "apellidos": {
+          "type": "string"
+        },
+        "dni": {
+          "type": "string"
+        },
+        "fechaNacimiento": {
+          "type": "string"
+        },
+        "domicilio": {
+          "type": "string"
+        },
+        "localidad": {
+          "type": "string"
+        },
+        "provincia": {
+          "type": "string"
+        },
+        "codigoPostal": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "telefono": {
+          "type": "string"
+        },
+        "horaSalidaEstudios": {
+          "type": "string"
+        },
+        "disponibilidadManana": {
+          "type": "boolean"
+        },
+        "autorizacionImagen": {
+          "type": "boolean"
+        },
+        "tutor1Nombre": {
+          "type": "string"
+        },
+        "tutor1Dni": {
+          "type": "string"
+        },
+        "tutor2Nombre": {
+          "type": "string"
+        },
+        "tutor2Dni": {
+          "type": "string"
+        },
+        "tipoEnsenanza": {
+          "type": "string"
+        },
+        "curso": {
+          "type": "string"
+        },
+        "ensenanzaCurso": {
+          "type": "string"
+        },
+        "especialidad": {
+          "type": "string"
+        },
+        "asignaturaPendiente1": {
+          "type": "string"
+        },
+        "asignaturaPendiente2": {
+          "type": "string"
+        },
+        "perfilProfesional": {
+          "type": "string"
+        },
+        "formaPago": {
+          "type": "string"
+        },
+        "familiaNumerosa": {
+          "type": "boolean"
+        },
+        "tipoReduccion": {
+          "type": "string"
+        },
+        "convalidacionSolicitada": {
+          "type": "boolean"
+        },
+        "convalidacionAsignaturas": {
+          "type": "string"
+        },
+        "matriculaHonor": {
+          "type": "boolean"
+        },
+        "esPrimerAno": {
+          "type": "boolean"
+        },
+        "importeTotal": {
+          "type": "string"
+        },
+        "importe1erPago": {
+          "type": "string"
+        },
+        "importe2oPago": {
+          "type": "string"
+        },
+        "nOrden": {
+          "type": "string"
+        },
+        "estado": {
+          "type": "string"
+        },
+        "asignaturas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "codigo": {
+                "type": "string"
+              },
+              "nombre": {
+                "type": "string"
+              },
+              "tipo": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "metadata": {
+    "operationMetadataId": "2f12d8a8-58b3-498c-a670-d204086f3451"
+  }
 }
 
 
@@ -1063,48 +958,35 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
 }
 
 
-
-
-
-
-
 TABLAS================================================
 
 
 
-Matrícula Asignatura (cr955\_matriculaasignatura)--------------------
+Matrícula Asignatura (cr955_matriculaasignatura)--------------------
 
 
+Estado Asignatura   cr955_EstadoAsignatura		Opción
 
-Nombre				Tipo de datos
+    904390000   Matriculada
+    904390001   Solicitud de Convalidación
+    904390002   Convalidada
+    904390003   Simultaneada
+    904390004   Pendiente
 
-cr955\_CodigoMateria		Línea de texto única
+Matrícula     cr955_Matricula			Búsqueda (tabla cr955_matriculas)
 
+Name          cr955_Name			Línea de texto única
 
+NPrden        cr955_NOrden			Número entero
 
-cr955\_EstadoAsignatura		Opción
+Asignatura    cr955_asignaturas busqueda (tabla cr955_asignaturas)
 
-
-
-cr955\_Matricula			Búsqueda
-
-
-
-cr955\_MatriculaAsignatura	Identificador unico
-
-
-
-cr955\_Name			Línea de texto única
+Observaciones cr955_Observaciones		Area de texto
 
 
+============================================================================
 
-cr955\_NOrden			Número entero
-
-
-
-
-
-Solicitudes de Matrículas (cpmmr\_matricula)----------------
+Solicitudes de Matrículas (cpmmr_matricula)----------------
 
 
 
@@ -1204,10 +1086,6 @@ cpmmr\_Telefono			Numero de telefono
 
 
 
-cr955\_convalidacionasignaturas	Varias líneas de texto
-
-
-
 cr955\_convalidacionsolicitada	Sí/No
 
 
@@ -1219,6 +1097,29 @@ cr955\_docfaltante		Línea de texto única
 cr955\_NOrden			Número entero
 
 
+====================================================================
 
+Asignatura (cr955_asignaturas)
+
+MATERIA   cr955_coursecode            Número entero
+
+ABREVIATURA   cr955_courseabbreviation    Línea de texto única
+
+DESCRIPCION   cr955_coursedescription     Línea de texto única
+
+CURSO_N       cr955_courselevel           Línea de texto única
+
+ENSEÑANZAS    cr955_educationtype        Línea de texto única
+        
+ESPECIALIDAD  cr955_specialization       Línea de texto única
+
+CURSO         cr955_courseleveldescription Línea de texto única
+
+
+
+
+Implementación de guardar las asignaturas
+
+tienes todo lo relativo a la parte de dataverse (tablas y flujos) en @Power Apps y P Automate.md, tenlo en cuenta a partir de ahora. Tengo una tabla llamada Matrícula Asignaturas donde se deben guardar las asignaturas matriculadas con una relación de 1:N con la carpeta Solicitudes de matrículas, me debes indicar como debo modificar los flows (me imagineo que el folo afectado sería el JSON con todos los datos) para que también suba las asignaturas matriculadas en los campos cr955_CodigoMateria ( en número que identifique a la asignatura), cr955_EstadoAsignatura (Matriculada -valor: 904390000 -, Solicitud de convalidación-valor: 904390003 -, Convalidada-valor: 904390001 -, Simultaneada-valor: 904390002 -), cr955_Matricula con el id de matrícula, cr955_MatriculaAsignatura id único, cr955_Name el nombre de la asignatura que da en el pdf en el cuadro de "Asignaturas en las que se Matricula"), cr955_NOrden el nº de orden de la matrícula. Lo que se pretende es trasladar la sección del pdf "Asignaturas en las que se Matricula" a la tabla
 
 

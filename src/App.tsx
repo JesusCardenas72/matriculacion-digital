@@ -5,8 +5,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { EnrollmentFormData } from './types';
-import { materias } from './data/materias';
-import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, FileText, Download, Paperclip, X } from 'lucide-react';
+import { materias, Materia } from './data/materias';
+import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, FileText, Download, Paperclip, X, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { pdf } from '@react-pdf/renderer';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
@@ -15,6 +15,16 @@ import logoCpm from './assets/logo_cpm.png';
 import logoJccm from './assets/logo_jccm.png';
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+const PROFILE_SPECIFIC_SUBJECTS = [
+  'Fundamentos de Composición',
+  'Improvisación',
+  'Informática musical',
+  'Didáctica de la Música',
+  'Didáctica musical',
+  'Coro',
+  'Música moderna'
+];
 
 export default function App() {
   const [formData, setFormData] = useState<EnrollmentFormData>({
@@ -49,6 +59,9 @@ export default function App() {
     importeTotal: '',
     importe1erPago: '',
     importe2oPago: '',
+    convalidacionSolicitada: false,
+    convalidacionAsignaturas: [] as string[],
+    convalidacionMotivo: '',
   });
 
   const [isExemptionModalOpen, setIsExemptionModalOpen] = useState(false);
@@ -59,6 +72,10 @@ export default function App() {
   const [validationErrors, setValidationErrors] = useState<{ key: string; label: string }[]>([]);
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [viewMode, setViewMode] = useState<'form' | 'readonly'>('form');
+  const [isConvalidacionModalOpen, setIsConvalidacionModalOpen] = useState(false);
+  const [isConvalidacionSubjectModalOpen, setIsConvalidacionSubjectModalOpen] = useState(false);
+  const [convalidacionModalView, setConvalidacionModalView] = useState<'types' | 'ministerio'>('types');
+  const [convalidacionSubjectContext, setConvalidacionSubjectContext] = useState<'doble' | 'eso_bach'>('doble');
 
   const handleValidationClose = () => {
     setShowValidationModal(false);
@@ -151,6 +168,13 @@ export default function App() {
 
     subtotalAcad += pending1Cost + pending2Cost;
 
+    // Convalidación: descuenta precioAsignatura por cada asignatura convalidada
+    const numConvalidadas = formData.convalidacionSolicitada
+      ? (formData.convalidacionAsignaturas ?? []).length
+      : 0;
+    const convalidacionDiscount = numConvalidadas * fees.precioAsignatura;
+    subtotalAcad = Math.max(0, subtotalAcad - convalidacionDiscount);
+
     // Matrícula de Honor: descuenta 58€ (apilable solo con fam_num_general, se aplica antes del multiplicador)
     if (formData.matriculaHonor) {
       subtotalAcad = Math.max(0, subtotalAcad - 58);
@@ -179,6 +203,8 @@ export default function App() {
         aperturaExpediente: formData.esPrimerAno ? fees.aperturaExpediente * multiplier : 0,
         curso: cursoBase * multiplier,
         asignaturasPendientes: (pending1Cost + pending2Cost) * multiplier,
+        convalidacionDiscount: convalidacionDiscount * multiplier,
+        convalidacionCount: numConvalidadas,
         matriculaHonorDiscount: formData.matriculaHonor ? 58 : 0,
         multiplier,
         reductionLabel: (() => {
@@ -195,7 +221,7 @@ export default function App() {
         })()
       }
     };
-  }, [formData.tipoEnsenanza, formData.curso, formData.esPrimerAno, formData.tipoReduccion, formData.matriculaHonor, formData.formaPago, formData.asignaturaPendiente1, formData.asignaturaPendiente2]);
+  }, [formData.tipoEnsenanza, formData.curso, formData.esPrimerAno, formData.tipoReduccion, formData.matriculaHonor, formData.formaPago, formData.asignaturaPendiente1, formData.asignaturaPendiente2, formData.convalidacionSolicitada, formData.convalidacionAsignaturas]);
 
   React.useEffect(() => {
     if (calculation) {
@@ -220,10 +246,6 @@ export default function App() {
     'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ec7a2a1c67974d32ba23de811d20e93d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3G39Rx3ZC55SKVIoBGvRufw-d6J6fYl74GOi46We9f0';
   const POWER_AUTOMATE_URL_PDF =
     'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b31521c981d04d95a8a6917a899f3988/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=i6YvgMW9GNJO-1Ynz0A3hAiNPGvZVpXkzbsdoeBYsfU';
-  // ── Power Automate URLs (cargadas desde variables de entorno para mayor seguridad) ──
-  const POWER_AUTOMATE_URL_DUPLICADOS = import.meta.env.VITE_POWER_AUTOMATE_URL_DUPLICADOS;
-  const POWER_AUTOMATE_URL = import.meta.env.VITE_POWER_AUTOMATE_URL;
-  const POWER_AUTOMATE_URL_PDF = import.meta.env.VITE_POWER_AUTOMATE_URL_PDF;
 
   const powerAutomateUrl = POWER_AUTOMATE_URL;
   const powerAutomateUrlPdf = POWER_AUTOMATE_URL_PDF;
@@ -356,6 +378,9 @@ export default function App() {
         newData.perfilProfesional = '';
         newData.asignaturaPendiente1 = '';
         newData.asignaturaPendiente2 = '';
+        newData.convalidacionAsignaturas = [];
+        newData.convalidacionSolicitada = false;
+        newData.convalidacionMotivo = '';
         if (val === 'elemental' && newData.formaPago === 'beca') {
           newData.formaPago = '';
         }
@@ -367,11 +392,31 @@ export default function App() {
         newData.perfilProfesional = '';
         newData.asignaturaPendiente1 = '';
         newData.asignaturaPendiente2 = '';
+        newData.convalidacionAsignaturas = [];
+        newData.convalidacionSolicitada = false;
+        newData.convalidacionMotivo = '';
       }
-      
+
       return newData;
     });
   };
+
+  const handleConvalidacionToggle = (materiaId: string) => {
+    setFormData(prev => {
+      const current = prev.convalidacionAsignaturas ?? [];
+      const updated = current.includes(materiaId)
+        ? current.filter((id: string) => id !== materiaId)
+        : [...current, materiaId];
+      return { ...prev, convalidacionAsignaturas: updated, convalidacionSolicitada: updated.length > 0 };
+    });
+  };
+
+  const renderConvalidacionRow = (count: number, discount: number) => (
+    <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
+      <span>{`Convalidación (${count} asig.)`}</span>
+      <span>{`-${discount.toFixed(2)}€`}</span>
+    </div>
+  );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files: File[] = e.target.files ? Array.from(e.target.files) : [];
@@ -570,6 +615,19 @@ export default function App() {
         const ensenanzaCursoNum = formData.curso.replace(/\D/g, '');
         const ensenanzaCurso = ensenanzaCursoPrefix && ensenanzaCursoNum ? `${ensenanzaCursoPrefix}${ensenanzaCursoNum}` : '';
 
+        const asignaturasParaDataverse = [
+          ...asignaturasCursoActual.map(a => ({
+            codigo: a.MATERIA,
+            nombre: a.DESCRIPCION,
+            tipo: (formData.convalidacionAsignaturas ?? []).includes(a.MATERIA) ? 'Convalidacion' : 'Ordinaria'
+          })),
+          ...selectedPendingSubjects.map(s => ({
+            codigo: s.id,
+            nombre: s.label,
+            tipo: 'Pendiente'
+          }))
+        ];
+
         const jsonPayload = {
           requestNumber: reqNum ?? '',
           nombre: formData.nombre,
@@ -599,12 +657,18 @@ export default function App() {
           formaPago: formData.formaPago,
           familiaNumerosa: formData.familiaNumerosa,
           tipoReduccion: formData.tipoReduccion,
+          convalidacionSolicitada: formData.convalidacionSolicitada,
+          convalidacionAsignaturas: (formData.convalidacionAsignaturas ?? [])
+            .map((id: string) => asignaturasCursoActual.find((m: Materia) => m.MATERIA === id)?.DESCRIPCION ?? id)
+            .join(', '),
           matriculaHonor: formData.matriculaHonor,
           esPrimerAno: formData.esPrimerAno,
           importeTotal: formData.importeTotal,
           importe1erPago: formData.importe1erPago ?? '',
           importe2oPago: formData.importe2oPago ?? '',
           estado: 'Recibida',
+          nOrden: reqNum?.split('-').pop() || '',
+          asignaturas: asignaturasParaDataverse
         };
 
         const res1 = await fetch(powerAutomateUrl, {
@@ -731,7 +795,7 @@ export default function App() {
                 setSubmitStatus('idle');
                 setViewMode('form');
                 setFormData({
-                  nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: ''
+                  nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: '', convalidacionSolicitada: false, convalidacionAsignaturas: [],
                 });
               }}
               className="w-full py-3 bg-white text-gray-900 border-2 border-gray-100 rounded-xl font-medium hover:bg-gray-50 transition-colors"
@@ -968,11 +1032,21 @@ export default function App() {
 
           {/* Matriculación */}
           <section className="bg-white rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
-              <div className="p-2 bg-gray-50 rounded-lg">
-                <GraduationCap size={20} className="text-gray-600" />
+            <div className="flex items-center justify-between mb-3 sm:mb-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-2 bg-gray-50 rounded-lg">
+                  <GraduationCap size={20} className="text-gray-600" />
+                </div>
+                <h2 className="text-base sm:text-xl font-semibold">Datos de Matriculación</h2>
               </div>
-              <h2 className="text-base sm:text-xl font-semibold">Datos de Matriculación</h2>
+              <button
+                type="button"
+                onClick={() => { setConvalidacionModalView('types'); setIsConvalidacionModalOpen(true); }}
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${(formData.convalidacionAsignaturas ?? []).length > 0 ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+              >
+                {(formData.convalidacionAsignaturas ?? []).length > 0 && <CheckCircle2 size={16} />}
+                Convalidación
+              </button>
             </div>
 
             <div className="space-y-8">
@@ -1070,26 +1144,50 @@ export default function App() {
                               Asignaturas en las que se matricula
                             </h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              {selectedPendingSubjects.map((m) => (
-                                <div key={`pending-${m.id}`} className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl shadow-sm border border-orange-100">
-                                  <span className="text-[10px] font-mono font-bold text-orange-500 bg-orange-100 px-1.5 py-0.5 rounded">
-                                    {m.materiaId}
-                                  </span>
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {m.label} (Pendiente)
-                                  </span>
-                                </div>
-                              ))}
-                              {asignaturasCursoActual.map((m) => (
-                                <div key={m.MATERIA} className="flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm border border-blue-100">
-                                  <span className="text-[10px] font-mono font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">
-                                    {m.MATERIA}
-                                  </span>
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {m.DESCRIPCION}
-                                  </span>
-                                </div>
-                              ))}
+                              {(() => {
+                                const convAsigs = formData.convalidacionAsignaturas ?? [];
+                                type SubjectRow = { group: number; key: string; code: string; name: string; tipo: 'matriculada' | 'perfil' | 'pendiente' | 'convalidada' };
+                                const rows: SubjectRow[] = [];
+                                for (const m of asignaturasCursoActual) {
+                                  const isConvalidada = convAsigs.includes(m.MATERIA);
+                                  const isPerfil = !isConvalidada && PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
+                                  rows.push({ group: isConvalidada ? 4 : isPerfil ? 2 : 1, key: m.MATERIA, code: m.MATERIA, name: m.DESCRIPCION, tipo: isConvalidada ? 'convalidada' : isPerfil ? 'perfil' : 'matriculada' });
+                                }
+                                for (const m of selectedPendingSubjects) {
+                                  rows.push({ group: 3, key: `pending-${m.id}`, code: m.materiaId, name: m.label, tipo: 'pendiente' });
+                                }
+                                rows.sort((a, b) => a.group - b.group || a.name.localeCompare(b.name, 'es'));
+                                const STYLES = {
+                                  matriculada: { bg: 'bg-white border-blue-100',      code: 'text-blue-500 bg-blue-50',      badge: 'text-blue-500 bg-blue-50 border-blue-100',        label: 'Matriculada' },
+                                  perfil:      { bg: 'bg-purple-50 border-purple-100', code: 'text-purple-500 bg-purple-100', badge: 'text-purple-500 bg-purple-100 border-purple-200', label: `Perfil ${formData.perfilProfesional}` },
+                                  pendiente:   { bg: 'bg-orange-50 border-orange-100', code: 'text-orange-500 bg-orange-100', badge: 'text-orange-500 bg-orange-100 border-orange-200', label: 'Pendiente' },
+                                  convalidada: { bg: 'bg-green-50 border-green-200',   code: 'text-green-700 bg-green-100',   badge: 'text-green-700 bg-green-100 border-green-200',    label: 'Solicitada convalidación' },
+                                };
+                                return rows.flatMap((item, idx) => {
+                                  const s = STYLES[item.tipo];
+                                  const isGroupStart = idx > 0 && rows[idx - 1].group !== item.group;
+                                  const card = (
+                                    <div key={item.key} className={`flex items-center gap-3 p-3 rounded-xl shadow-sm border ${s.bg}`}>
+                                      <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${s.code}`}>
+                                        {item.code}
+                                      </span>
+                                      <span className="text-sm font-medium text-gray-700 flex-1 min-w-0">
+                                        {item.name}
+                                      </span>
+                                      <span className={`text-[10px] font-bold border px-2 py-0.5 rounded-full whitespace-nowrap shrink-0 ${s.badge}`}>
+                                        {s.label}
+                                      </span>
+                                    </div>
+                                  );
+                                  if (!isGroupStart) return [card];
+                                  return [
+                                    <div key={`sep-${item.group}`} className="col-span-full pt-1 pb-0">
+                                      <hr className="border-t border-blue-100/60" />
+                                    </div>,
+                                    card,
+                                  ];
+                                });
+                              })()}
                             </div>
                           </div>
                         ) : (
@@ -1622,6 +1720,7 @@ export default function App() {
                           <span className="font-medium">{calculation.details.asignaturasPendientes.toFixed(2)}€</span>
                         </div>
                       )}
+                      {calculation.details.convalidacionDiscount > 0 && renderConvalidacionRow(calculation.details.convalidacionCount, calculation.details.convalidacionDiscount)}
                       {calculation.details.matriculaHonorDiscount > 0 && (
                         <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
                           <span>Matrícula de Honor (Art. 13)</span>
@@ -1950,6 +2049,363 @@ export default function App() {
           <p>© 2026 Conservatorio Profesional de Música "Marcos Redondo" - Ciudad Real</p>
           <p className="mt-1">Sistema de Matriculación Digital</p>
         </footer>
+
+      {/* ── Modal: Convalidación (principal) ── */}
+      <AnimatePresence>
+        {isConvalidacionModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsConvalidacionModalOpen(false)}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[150]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl bg-white rounded-[2.5rem] p-8 shadow-2xl z-[160] border border-gray-100 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gray-900 text-white rounded-lg">
+                    <CheckCircle2 size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold">Convalidación de Asignaturas</h3>
+                </div>
+                <button type="button" onClick={() => setIsConvalidacionModalOpen(false)} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <AnimatePresence mode="wait">
+                {convalidacionModalView === 'types' ? (
+                  <motion.div
+                    key="types"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    className="space-y-4"
+                  >
+                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
+                      <p className="text-sm text-blue-800 leading-relaxed">
+                        Seleccione el tipo de convalidación que desea solicitar. En los dos primeros casos podrá elegir las asignaturas concretas y se aplicará la <strong>reducción correspondiente en las tasas de matrícula</strong>.
+                      </p>
+                    </div>
+
+                    {/* Botón 1: Doble Especialidad */}
+                    <button
+                      type="button"
+                      onClick={() => { setConvalidacionSubjectContext('doble'); setFormData((prev: EnrollmentFormData) => ({ ...prev, convalidacionMotivo: 'doble' })); setIsConvalidacionSubjectModalOpen(true); }}
+                      className="w-full text-left p-5 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all border border-gray-100 hover:border-gray-200 group"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="p-3 bg-white rounded-xl shadow-sm border border-gray-100 shrink-0 group-hover:shadow">
+                          <GraduationCap size={22} className="text-gray-700" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 text-sm sm:text-base">Convalidación por Doble Especialidad o Similar</p>
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed">Asignatura ya cursada y superada con coincidencia en denominación y curso.</p>
+                          <p className="text-xs text-amber-600 font-semibold mt-1.5">Excepciones: Orquesta/Banda y Música de Cámara</p>
+                          <p className="text-[10px] text-blue-600 font-bold mt-2 uppercase tracking-wider">Supone reducción en tasas de matrícula.</p>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Botón 2: ESO y Bachillerato */}
+                    <button
+                      type="button"
+                      onClick={() => { setConvalidacionSubjectContext('eso_bach'); setFormData((prev: EnrollmentFormData) => ({ ...prev, convalidacionMotivo: 'eso_bach' })); setIsConvalidacionSubjectModalOpen(true); }}
+                      className="w-full text-left p-5 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all border border-gray-100 hover:border-gray-200 group"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="p-3 bg-white rounded-xl shadow-sm border border-gray-100 shrink-0 group-hover:shadow">
+                          <FileText size={22} className="text-gray-700" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 text-sm sm:text-base">Asignaturas de ESO y Bachillerato</p>
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed">Convalidación de asignaturas del conservatorio con materias de ESO o Bachillerato.</p>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            <a
+                              href="https://www.conservatoriociudadreal.es/wp-content/uploads/2025/09/Convalidaciones-ESO-FAQ.pdf"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 underline"
+                            >
+                              <ExternalLink size={11} /> Ver detalle ESO
+                            </a>
+                            <a
+                              href="https://www.conservatoriociudadreal.es/wp-content/uploads/2025/09/Convalidaciones-Bachillerato-FAQ.pdf"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 underline"
+                            >
+                              <ExternalLink size={11} /> Ver detalle Bachillerato
+                            </a>
+                          </div>
+                          <p className="text-[10px] text-blue-600 font-bold mt-2 uppercase tracking-wider">Supone reducción en tasas de matrícula. Se debe aportar certificado que acredita que se va a cursar o que ha sido cursada y la nota obtenida, como documento adjunto a esta solicitud</p>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Botón 3: Otros estudios / Ministerio */}
+                    <button
+                      type="button"
+                      onClick={() => setConvalidacionModalView('ministerio')}
+                      className="w-full text-left p-5 bg-gray-50 hover:bg-gray-100 rounded-2xl transition-all border border-gray-100 hover:border-gray-200 group"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="p-3 bg-white rounded-xl shadow-sm border border-gray-100 shrink-0 group-hover:shadow">
+                          <AlertCircle size={22} className="text-gray-700" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-900 text-sm sm:text-base">Otros Estudios o Planes de Estudios Anteriores</p>
+                          <p className="text-xs text-gray-500 mt-1 leading-relaxed">Estudios distintos o planes de estudios de estudios antiguos no reconocibles directamente.</p>
+                          <p className="text-[10px] text-red-600 font-bold mt-2 uppercase tracking-wider">No supone reducción en tasas de matrícula en este momento de la Matriculación, hasta que sea resuelta por el Ministerio de Educación.</p>
+                        </div>
+                      </div>
+                    </button>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="ministerio"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    className="space-y-4"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setConvalidacionModalView('types')}
+                      className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-gray-700 uppercase tracking-wider mb-2 transition-colors"
+                    >
+                      ← Volver a tipos de convalidación
+                    </button>
+
+                    <div className="p-5 bg-amber-50 border border-amber-200 rounded-2xl space-y-3">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold text-amber-900 text-sm">Tramitación a través del Ministerio de Educación</p>
+                          <p className="text-sm text-amber-800 leading-relaxed mt-2">
+                            Este tipo de convalidación no se resuelve de forma directa en el centro. Deberá realizar la solicitud ante el <strong>Ministerio de Educación, Formación Profesional y Deportes</strong> y, una vez obtenida la resolución, notificarla al conservatorio para que se proceda a la convalidación.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3">
+                      <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+                      <p className="text-sm text-red-700 leading-relaxed">
+                        Este tipo de convalidación{' '}
+                        <strong>no conlleva reducción en el precio de las tasas de matrícula, hasta el momento de que sea aceptada la convalidación por el Ministerio, pudiendo solicitar la Devolución de Ingresos Indebidos (Modelo&nbsp;413)</strong>.
+                      </p>
+                    </div>
+
+                    <a
+                      href="https://www.educacionfpydeportes.gob.es/servicios-al-ciudadano/catalogo/gestion-titulos/estudios-no-universitarios/titulos-espanoles/convalidaciones/convalidacion-estudios-musica-danza.html"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 p-4 bg-gray-50 rounded-2xl border border-gray-200 hover:bg-gray-100 transition-all text-sm font-bold text-gray-700"
+                    >
+                      <ExternalLink size={16} className="shrink-0" />
+                      <span>Solicitud de convalidación en el Ministerio de Educación</span>
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsConvalidacionModalOpen(false)}
+                      className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all"
+                    >
+                      Cerrar
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modal: Convalidación - Selección de Asignaturas ── */}
+      <AnimatePresence>
+        {isConvalidacionSubjectModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsConvalidacionSubjectModalOpen(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[170]"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl z-[180] border border-gray-100 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gray-900 text-white rounded-lg">
+                    <CheckCircle2 size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold">
+                      {convalidacionSubjectContext === 'doble' ? 'Doble Especialidad o Similar' : 'ESO y Bachillerato'}
+                    </h3>
+                    <p className="text-xs text-gray-400 uppercase font-bold tracking-wider mt-0.5">Selección de asignaturas</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setIsConvalidacionSubjectModalOpen(false)} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {convalidacionSubjectContext === 'doble' && (
+                <div className="mb-4 p-4 bg-amber-50 border border-amber-100 rounded-2xl">
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    <strong>Excepciones:</strong> No son convalidables por esta vía las asignaturas de Orquesta/Banda, Música de Cámara y Repertorio Acompañado.
+                  </p>
+                </div>
+              )}
+
+              {convalidacionSubjectContext === 'eso_bach' && (
+                <div className="mb-4 space-y-2">
+                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Documentación de referencia</p>
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      href="https://www.conservatoriociudadreal.es/wp-content/uploads/2025/09/Convalidaciones-ESO-FAQ.pdf"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-100 rounded-xl text-xs font-bold text-blue-700 hover:bg-blue-100 transition-colors"
+                    >
+                      <ExternalLink size={12} /> Ver detalle ESO (PDF)
+                    </a>
+                    <a
+                      href="https://www.conservatoriociudadreal.es/wp-content/uploads/2025/09/Convalidaciones-Bachillerato-FAQ.pdf"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-100 rounded-xl text-xs font-bold text-blue-700 hover:bg-blue-100 transition-colors"
+                    >
+                      <ExternalLink size={12} /> Ver detalle Bachillerato (PDF)
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {/* Selectores inline si falta curso o especialidad */}
+              {(!formData.curso || !formData.especialidad) && (
+                <div className="mb-5 p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-3">
+                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400">Completa los datos del curso</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-gray-500 font-medium">Enseñanza</label>
+                      <select
+                        name="tipoEnsenanza"
+                        value={formData.tipoEnsenanza}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-200 appearance-none cursor-pointer"
+                      >
+                        <option value="elemental">Elemental</option>
+                        <option value="profesional">Profesional</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-gray-500 font-medium">Curso</label>
+                      <select
+                        name="curso"
+                        value={formData.curso}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-200 appearance-none cursor-pointer"
+                      >
+                        <option value="" disabled>Seleccionar...</option>
+                        {(formData.tipoEnsenanza === 'elemental' ? ['1º','2º','3º','4º'] : ['1º','2º','3º','4º','5º','6º']).map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-gray-500 font-medium">Especialidad</label>
+                      <select
+                        name="especialidad"
+                        value={formData.especialidad}
+                        onChange={handleChange}
+                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-200 appearance-none cursor-pointer"
+                      >
+                        <option value="" disabled>Seleccionar...</option>
+                        {["Canto","Clarinete","Contrabajo","Fagot","Flauta Travesera","Guitarra","Oboe","Percusión","Piano","Saxofón","Trombón","Trompa","Trompeta","Tuba","Viola","Violín","Violoncello"]
+                          .filter(esp => !(formData.tipoEnsenanza === 'elemental' && esp === 'Canto'))
+                          .map(esp => <option key={esp} value={esp}>{esp}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Asignaturas que solicita convalidar</label>
+                {asignaturasCursoActual.length === 0 ? (
+                  <p className="text-sm text-gray-500 bg-gray-50 rounded-xl px-4 py-3">
+                    {!formData.curso || !formData.especialidad
+                      ? 'Selecciona el curso y la especialidad para ver las asignaturas disponibles.'
+                      : 'No se han encontrado asignaturas para la combinación seleccionada.'}
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {asignaturasCursoActual.map((materia: Materia) => {
+                      const checked = (formData.convalidacionAsignaturas ?? []).includes(materia.MATERIA);
+                      return (
+                        <label
+                          key={materia.MATERIA}
+                          className={`flex items-center gap-3 cursor-pointer px-4 py-3 rounded-xl transition-all ${checked ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 hover:bg-gray-100'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => handleConvalidacionToggle(materia.MATERIA)}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{materia.DESCRIPCION}</span>
+                          {checked && (
+                            <span className="ml-auto text-xs font-semibold text-blue-600">
+                              −{formData.tipoEnsenanza === 'elemental' ? '47' : '58'} €
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {(formData.convalidacionAsignaturas ?? []).length > 0 && (
+                  <p className="text-xs text-blue-700 font-semibold ml-1">
+                    {(formData.convalidacionAsignaturas ?? []).length} asignatura{(formData.convalidacionAsignaturas ?? []).length > 1 ? 's' : ''} seleccionada{(formData.convalidacionAsignaturas ?? []).length > 1 ? 's' : ''} — descuento: −{(formData.convalidacionAsignaturas ?? []).length * (formData.tipoEnsenanza === 'elemental' ? 47 : 58)} €
+                  </p>
+                )}
+                <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-start gap-2">
+                  <AlertCircle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    La resolución quedará condicionada a la aportación de documentación acreditativa (certificado académico oficial, programas de estudio, etc.). El centro le comunicará el resultado y, en su caso, el importe definitivo a abonar.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsConvalidacionSubjectModalOpen(false);
+                  setIsConvalidacionModalOpen(false);
+                }}
+                className="w-full mt-6 py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all"
+              >
+                Confirmar selección
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
       </div>
 
 

@@ -16,6 +16,8 @@ export type CalcResult = {
     asignaturasPendientes: number;
     matriculaHonorDiscount: number;
     multiplier: number;
+    convalidacionDiscount: number;
+    convalidacionCount: number;
   };
 } | null;
 
@@ -36,8 +38,24 @@ const C = {
   gray800: '#1F2937', gray900: '#111827',
   blue50: '#EFF6FF', blue200: '#BFDBFE', blue800: '#1E40AF',
   orange50: '#FFF7ED', orange200: '#FED7AA', orange800: '#92400E',
-  green100: '#DCFCE7', green700: '#15803D',
+  green50: '#F0FDF4', green100: '#DCFCE7', green200: '#BBF7D0', green700: '#15803D', green800: '#166534',
+  purple50: '#FAF5FF', purple100: '#F3E8FF', purple200: '#E9D5FF', purple700: '#7E22CE',
   blue700: '#1D4ED8',
+};
+
+const PROFILE_SPECIFIC_SUBJECTS = [
+  'Fundamentos de Composición',
+  'Improvisación',
+  'Informática musical',
+  'Didáctica de la Música',
+  'Didáctica musical',
+  'Coro',
+  'Música moderna',
+];
+
+const CONVALIDACION_MOTIVO_LABEL: Record<'doble' | 'eso_bach', string> = {
+  doble: 'Convalidación por doble especialidad o similar',
+  eso_bach: 'Asignaturas de ESO y Bachillerato',
 };
 
 const s = StyleSheet.create({
@@ -233,6 +251,11 @@ export const MatriculaPdf = ({ formData, academicYear, submitTimestamp, asignatu
                       <DesgloseRow label="Matricula de Honor (Art. 13)" value={`-${d.matriculaHonorDiscount.toFixed(2)} EUR`} discount />
                     </View>
                   )}
+                  {d.convalidacionDiscount > 0 && (
+                    <View style={{ borderTopWidth: 1, borderTopColor: C.gray200, borderTopStyle: 'solid', marginTop: 2 }}>
+                      <DesgloseRow label={`Convalidacion (${d.convalidacionCount} asig.)`} value={`-${d.convalidacionDiscount.toFixed(2)} EUR`} discount />
+                    </View>
+                  )}
                   {d.multiplier < 1 && (
                     <View style={{ borderTopWidth: 1, borderTopColor: C.gray200, borderTopStyle: 'solid', marginTop: 2 }}>
                       <DesgloseRow label="Reduccion aplicada" value={`-${((1 - d.multiplier) * 100).toFixed(0)}%`} discount />
@@ -285,25 +308,79 @@ export const MatriculaPdf = ({ formData, academicYear, submitTimestamp, asignatu
               <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>Perfil {formData.perfilProfesional} — {perfilLabel}</Text>
             </View>
           )}
-          {(asignaturasCursoActual.length > 0 || selectedPendingSubjects.length > 0) && (
-            <View style={{ backgroundColor: C.blue50, borderRadius: 6, padding: 8, borderWidth: 1, borderColor: C.blue200, borderStyle: 'solid', marginTop: 4 }}>
-              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.blue800, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>
-                Asignaturas en las que se matricula
-              </Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3 }}>
-                {selectedPendingSubjects.map(m => (
-                  <View key={`p-${m.id}`} style={{ width: '24%', backgroundColor: C.orange50, borderRadius: 4, borderWidth: 1, borderColor: C.orange200, borderStyle: 'solid', paddingHorizontal: 6, paddingVertical: 3 }}>
-                    <Text style={{ fontSize: 7, color: C.orange800 }}>{m.label} (Pend.)</Text>
+          {(() => {
+            const convAsigs = formData.convalidacionAsignaturas ?? [];
+            type SubjectRow = { group: 1 | 2 | 3; key: string; code: string; name: string; tipo: 'matriculada' | 'perfil' | 'pendiente' };
+            const rows: SubjectRow[] = [];
+            for (const m of asignaturasCursoActual) {
+              if (convAsigs.includes(m.MATERIA)) continue;
+              const isPerfil = PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
+              rows.push({ group: isPerfil ? 2 : 1, key: m.MATERIA, code: m.MATERIA, name: m.DESCRIPCION, tipo: isPerfil ? 'perfil' : 'matriculada' });
+            }
+            for (const m of selectedPendingSubjects) {
+              rows.push({ group: 3, key: `pending-${m.id}`, code: m.materiaId, name: m.label, tipo: 'pendiente' });
+            }
+            rows.sort((a, b) => a.group - b.group || a.name.localeCompare(b.name, 'es'));
+            const STYLES: Record<SubjectRow['tipo'], { bg: string; border: string; code: string; codeBg: string; badge: string; badgeBg: string; badgeBorder: string; label: string }> = {
+              matriculada: { bg: C.white,      border: C.blue200,   code: C.blue700,   codeBg: C.blue50,   badge: C.blue700,   badgeBg: C.blue50,   badgeBorder: C.blue200,   label: 'Matriculada' },
+              perfil:      { bg: C.purple50,   border: C.purple200, code: C.purple700, codeBg: C.purple100, badge: C.purple700, badgeBg: C.purple100, badgeBorder: C.purple200, label: `Perfil ${formData.perfilProfesional || ''}`.trim() },
+              pendiente:   { bg: C.orange50,   border: C.orange200, code: C.orange800, codeBg: C.orange50,  badge: C.orange800, badgeBg: C.orange50,  badgeBorder: C.orange200, label: 'Pendiente' },
+            };
+            const motivo = formData.convalidacionMotivo;
+            const motivoLabel = motivo === 'doble' || motivo === 'eso_bach' ? CONVALIDACION_MOTIVO_LABEL[motivo] : '';
+            const convalidadas = asignaturasCursoActual.filter(m => convAsigs.includes(m.MATERIA));
+            return (
+              <>
+                {rows.length > 0 && (
+                  <View style={{ backgroundColor: C.blue50, borderRadius: 6, padding: 8, borderWidth: 1, borderColor: C.blue200, borderStyle: 'solid', marginTop: 4 }}>
+                    <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.blue800, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 5 }}>
+                      Asignaturas:
+                    </Text>
+                    <View>
+                      {rows.map((item, idx) => {
+                        const st = STYLES[item.tipo];
+                        const isGroupStart = idx > 0 && rows[idx - 1].group !== item.group;
+                        return (
+                          <View key={item.key}>
+                            {isGroupStart && (
+                              <View style={{ borderTopWidth: 1, borderTopColor: C.blue200, borderTopStyle: 'solid', marginVertical: 3, opacity: 0.6 }} />
+                            )}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: st.bg, borderWidth: 1, borderColor: st.border, borderStyle: 'solid', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3, marginBottom: 2 }}>
+                              <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: st.code, backgroundColor: st.codeBg, paddingHorizontal: 3, paddingVertical: 1, borderRadius: 2 }}>
+                                {item.code}
+                              </Text>
+                              <Text style={{ fontSize: 8, color: C.gray700, flex: 1 }}>{item.name}</Text>
+                              <Text style={{ fontSize: 6, fontFamily: 'Helvetica-Bold', color: st.badge, backgroundColor: st.badgeBg, borderWidth: 1, borderColor: st.badgeBorder, borderStyle: 'solid', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 8 }}>
+                                {st.label}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
                   </View>
-                ))}
-                {asignaturasCursoActual.map(m => (
-                  <View key={m.MATERIA} style={{ width: '24%', backgroundColor: C.white, borderRadius: 4, borderWidth: 1, borderColor: C.blue200, borderStyle: 'solid', paddingHorizontal: 6, paddingVertical: 3 }}>
-                    <Text style={{ fontSize: 7, color: C.gray700 }}>{m.DESCRIPCION}</Text>
+                )}
+                {convalidadas.length > 0 && (
+                  <View style={{ backgroundColor: C.green50, borderRadius: 6, padding: 8, borderWidth: 1, borderColor: C.green200, borderStyle: 'solid', marginTop: 4 }}>
+                    <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.green800, marginBottom: 3 }}>SOLICITA:</Text>
+                    <Text style={{ fontSize: 8, color: C.gray700, lineHeight: 1.4, marginBottom: 5 }}>
+                      Que, de acuerdo con la normativa vigente en materia de ordenación académica, por razón de "{motivoLabel}", se proceda a la convalidación de las asignaturas que se detallan a continuación:
+                    </Text>
+                    <View>
+                      {convalidadas.map(m => (
+                        <View key={`conv-${m.MATERIA}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: C.white, borderWidth: 1, borderColor: C.green200, borderStyle: 'solid', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 3, marginBottom: 2 }}>
+                          <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.green700, backgroundColor: C.green100, paddingHorizontal: 3, paddingVertical: 1, borderRadius: 2 }}>
+                            {m.MATERIA}
+                          </Text>
+                          <Text style={{ fontSize: 8, color: C.gray700, flex: 1 }}>{m.DESCRIPCION}</Text>
+                        </View>
+                      ))}
+                    </View>
                   </View>
-                ))}
-              </View>
-            </View>
-          )}
+                )}
+              </>
+            );
+          })()}
         </View>
 
         {/* ── Pie de página ── */}

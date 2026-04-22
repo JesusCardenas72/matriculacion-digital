@@ -43,4 +43,8 @@ export interface EnrollmentFormData {
   importeTotal: string;
   importe1erPago?: string;
   importe2oPago?: string;
+  // Convalidación de asignaturas (solicitud durante la matrícula)
+  convalidacionSolicitada?: boolean;
+  convalidacionAsignaturas?: string[];
+  convalidacionMotivo?: 'doble' | 'eso_bach' | '';
 }
