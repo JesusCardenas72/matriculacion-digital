@@ -2,7 +2,7 @@ Flows:
 
 
 
-Duplicados+NOrden
+**Duplicados+NOrden**
 
 URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b62c3d4b21d24bda8daa75a8586198eb/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=4nqPljifCY1CBxAiKj03La2YEksNn78meKn9-nlXGCk
 
@@ -240,7 +240,7 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
 }
 
 ===========================================================================================================
-JSON con PDF
+**JSON con PDF**
 
 URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b31521c981d04d95a8a6917a899f3988/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=i6YvgMW9GNJO-1Ynz0A3hAiNPGvZVpXkzbsdoeBYsfU
 
@@ -647,13 +647,14 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
 
 
 ====================================================================================================================
-JSON con todos los datos
+**JSON con todos los datos**
 
 URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ec7a2a1c67974d32ba23de811d20e93d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3G39Rx3ZC55SKVIoBGvRufw-d6J6fYl74GOi46We9f0
 
 
 
 1.Request (trigger)
+
 {
   "type": "Request",
   "kind": "Http",
@@ -797,125 +798,169 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
 
 
 
-2.{
+2.Inicializar variable
 
-&#x20; "type": "InitializeVariable",
-
-&#x20; "inputs": {
-
-&#x20;   "variables": \[
-
-&#x20;     {
-
-&#x20;       "name": "EnsenanzaCurso",
-
-&#x20;       "type": "string",
-
-&#x20;       "value": "concat(\\n  if(equals(triggerBody()?\['tipoEnsenanza'], 'elemental'), 'EE', 'EP'),\\n  replace(replace(replace(replace(replace(replace(\\n    triggerBody()?\['curso'],\\n  '1º','1'),'2º','2'),'3º','3'),'4º','4'),'5º','5'),'6º','6')\\n)"
-
-&#x20;     }
-
-&#x20;   ]
-
-&#x20; },
-
-&#x20; "runAfter": {},
-
-&#x20; "metadata": {
-
-&#x20;   "operationMetadataId": "af02b414-88da-4602-bae5-b96fdd759dcd"
-
-&#x20; }
-
+{
+  "type": "InitializeVariable",
+  "inputs": {
+    "variables": [
+      {
+        "name": "EnsenanzaCurso",
+        "type": "string",
+        "value": "concat(\n  if(equals(triggerBody()?['tipoEnsenanza'], 'elemental'), 'EE', 'EP'),\n  replace(replace(replace(replace(replace(replace(\n    triggerBody()?['curso'],\n  '1º','1'),'2º','2'),'3º','3'),'4º','4'),'5º','5'),'6º','6')\n)"
+      }
+    ]
+  },
+  "runAfter": {},
+  "metadata": {
+    "operationMetadataId": "af02b414-88da-4602-bae5-b96fdd759dcd"
+  }
 }
 
 
 
-3.{
+3. Dataverse
 
-&#x20; "type": "OpenApiConnection",
-
-&#x20; "inputs": {
-
-&#x20;   "parameters": {
-
-&#x20;     "entityName": "cpmmr\_matriculas",
-
-&#x20;     "x-ms-odata-metadata-full": true,
-
-&#x20;     "item/cpmmr\_apellidos": "@triggerBody()?\['apellidos']",
-
-&#x20;     "item/cpmmr\_autorizacionimagen": "@triggerBody()?\['autorizacionImagen']",
-
-&#x20;     "item/cr955\_convalidacionasignaturas": "@triggerBody()?\['convalidacionAsignaturas']",
-
-&#x20;     "item/cr955\_convalidacionsolicitada": "@triggerBody()?\['convalidacionSolicitada']",
-
-&#x20;     "item/cpmmr\_cp": "@triggerBody()?\['codigoPostal']",
-
-&#x20;     "item/cpmmr\_disponibilidadmanana": "@triggerBody()?\['disponibilidadManana']",
-
-&#x20;     "item/cpmmr\_dni": "@triggerBody()?\['dni']",
-
-&#x20;     "item/cpmmr\_domicilio": "@triggerBody()?\['domicilio']",
-
-&#x20;     "item/cpmmr\_email": "@triggerBody()?\['email']",
-
-&#x20;     "item/cpmmr\_ensenanzaycurso": "@triggerBody()?\['ensenanzaCurso']\\r\\n",
-
-&#x20;     "item/cpmmr\_especialidad": "@triggerBody()?\['especialidad']",
-
-&#x20;     "item/cpmmr\_fechanacimiento": "@triggerBody()?\['fechaNacimiento']",
-
-&#x20;     "item/cpmmr\_formadepago": "@triggerBody()?\['formaPago']",
-
-&#x20;     "item/cpmmr\_horasalida": "@triggerBody()?\['horaSalidaEstudios']",
-
-&#x20;     "item/cpmmr\_localidad": "@triggerBody()?\['localidad']",
-
-&#x20;     "item/cpmmr\_nombre": "@triggerBody()?\['nombre']",
-
-&#x20;     "item/cpmmr\_provincia": "@triggerBody()?\['provincia']",
-
-&#x20;     "item/cpmmr\_reducciontasas": "@triggerBody()?\['tipoReduccion']",
-
-&#x20;     "item/cpmmr\_telefono": "@triggerBody()?\['telefono']"
-
-&#x20;   },
-
-&#x20;   "host": {
-
-&#x20;     "apiId": "/providers/Microsoft.PowerApps/apis/shared\_commondataserviceforapps",
-
-&#x20;     "connection": "shared\_commondataserviceforapps",
-
-&#x20;     "operationId": "CreateRecord"
-
-&#x20;   }
-
-&#x20; },
-
-&#x20; "runAfter": {
-
-&#x20;   "Inicializar\_variable": \[
-
-&#x20;     "Succeeded"
-
-&#x20;   ]
-
-&#x20; },
-
-&#x20; "metadata": {
-
-&#x20;   "operationMetadataId": "3b052bbb-f06e-4d13-8dc1-1f3adcbea36d"
-
-&#x20; }
-
+{
+  "type": "OpenApiConnection",
+  "inputs": {
+    "parameters": {
+      "entityName": "cpmmr_matriculas",
+      "x-ms-odata-metadata-full": true,
+      "item/cpmmr_apellidos": "@triggerBody()?['apellidos']",
+      "item/cpmmr_autorizacionimagen": "@triggerBody()?['autorizacionImagen']",
+      "item/cr955_convalidacionsolicitada": "@triggerBody()?['convalidacionSolicitada']",
+      "item/cpmmr_cp": "@triggerBody()?['codigoPostal']",
+      "item/cpmmr_disponibilidadmanana": "@triggerBody()?['disponibilidadManana']",
+      "item/cpmmr_dni": "@triggerBody()?['dni']",
+      "item/cpmmr_domicilio": "@triggerBody()?['domicilio']",
+      "item/cpmmr_email": "@triggerBody()?['email']",
+      "item/cpmmr_ensenanzaycurso": "@triggerBody()?['ensenanzaCurso']\r\n",
+      "item/cpmmr_especialidad": "@triggerBody()?['especialidad']",
+      "item/cpmmr_fechanacimiento": "@triggerBody()?['fechaNacimiento']",
+      "item/cpmmr_formadepago": "@triggerBody()?['formaPago']",
+      "item/cpmmr_horasalida": "@triggerBody()?['horaSalidaEstudios']",
+      "item/cpmmr_localidad": "@triggerBody()?['localidad']",
+      "item/cpmmr_nombre": "@triggerBody()?['nombre']",
+      "item/cpmmr_provincia": "@triggerBody()?['provincia']",
+      "item/cpmmr_reducciontasas": "@triggerBody()?['tipoReduccion']",
+      "item/cpmmr_telefono": "@triggerBody()?['telefono']"
+    },
+    "host": {
+      "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+      "connection": "shared_commondataserviceforapps",
+      "operationId": "CreateRecord"
+    }
+  },
+  "runAfter": {
+    "Inicializar_variable": [
+      "Succeeded"
+    ]
+  },
+  "metadata": {
+    "operationMetadataId": "3b052bbb-f06e-4d13-8dc1-1f3adcbea36d"
+  }
 }
 
 
+4. Aply to each
 
-4.{
+{
+  "type": "Foreach",
+  "foreach": "@triggerBody()?['asignaturas']",
+  "actions": {
+    "Add_a_new_row": {
+      "type": "OpenApiConnection",
+      "inputs": {
+        "parameters": {
+          "entityName": "cr955_matriculaasignaturas",
+          "item/cr955_name": "@items('Apply_to_each')?['nombre']",
+          "item/cr955_Asignatura@odata.bind": "@concat('/cr955_asignaturases(',first(outputs('List_rows')?['body/value'])?['cr955_asignaturasid'],')')",
+          "item/cr955_estadoasignatura": "@if(equals(items('Apply_to_each')?['tipo'],'Convalidacion'),904390001,if(equals(items('Apply_to_each')?['tipo'],'Pendiente'),904390004,904390000))",
+          "item/cr955_Matricula@odata.bind": "@concat('/cpmmr_matriculas(',outputs('Dataverse')?['body/cpmmr_matriculaid'],')')"
+        },
+        "host": {
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+          "connection": "shared_commondataserviceforapps",
+          "operationId": "CreateRecord"
+        }
+      },
+      "runAfter": {
+        "List_rows": [
+          "Succeeded"
+        ]
+      }
+    },
+    "List_rows": {
+      "type": "OpenApiConnection",
+      "inputs": {
+        "parameters": {
+          "entityName": "cr955_asignaturases",
+          "$filter": "@concat('cr955_coursecode eq ',items('Apply_to_each')?['codigo'])",
+          "$top": 1
+        },
+        "host": {
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+          "connection": "shared_commondataserviceforapps",
+          "operationId": "ListRecords"
+        }
+      }
+    }
+  },
+  "runAfter": {
+    "Dataverse": [
+      "Succeeded"
+    ]
+  }
+}
+
+
+4.1. List rows
+
+{
+  "type": "OpenApiConnection",
+  "inputs": {
+    "parameters": {
+      "entityName": "cr955_asignaturases",
+      "$filter": "@concat('cr955_coursecode eq ',items('Apply_to_each')?['codigo'])",
+      "$top": 1
+    },
+    "host": {
+      "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+      "connection": "shared_commondataserviceforapps",
+      "operationId": "ListRecords"
+    }
+  }
+}
+
+4.2. Add a new row
+
+{
+  "type": "OpenApiConnection",
+  "inputs": {
+    "parameters": {
+      "entityName": "cr955_matriculaasignaturas",
+      "item/cr955_name": "@items('Apply_to_each')?['nombre']",
+      "item/cr955_Asignatura@odata.bind": "@concat('/cr955_asignaturases(',first(outputs('List_rows')?['body/value'])?['cr955_asignaturasid'],')')",
+      "item/cr955_estadoasignatura": "@if(equals(items('Apply_to_each')?['tipo'],'Convalidacion'),904390001,if(equals(items('Apply_to_each')?['tipo'],'Pendiente'),904390004,904390000))",
+      "item/cr955_Matricula@odata.bind": "@concat('/cpmmr_matriculas(',outputs('Dataverse')?['body/cpmmr_matriculaid'],')')"
+    },
+    "host": {
+      "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+      "connection": "shared_commondataserviceforapps",
+      "operationId": "CreateRecord"
+    }
+  },
+  "runAfter": {
+    "List_rows": [
+      "Succeeded"
+    ]
+  }
+}
+
+5. Respuesta
+
+{
 
 &#x20; "type": "Response",
 
