@@ -794,8 +794,12 @@ export default function App() {
               onClick={() => {
                 setSubmitStatus('idle');
                 setViewMode('form');
+                setSubmitTimestamp(null);
+                setRequestNumber(null);
+                setAttachments([]);
+                setValidationErrors([]);
                 setFormData({
-                  nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: '', convalidacionSolicitada: false, convalidacionAsignaturas: [],
+                  nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: '', convalidacionSolicitada: false, convalidacionAsignaturas: [], convalidacionMotivo: '',
                 });
               }}
               className="w-full py-3 bg-white text-gray-900 border-2 border-gray-100 rounded-xl font-medium hover:bg-gray-50 transition-colors"
@@ -1989,26 +1993,28 @@ export default function App() {
                   </div>
 
                   <button
+                    type="button"
+                    onClick={handlePreviewPdf}
+                    className="w-full mt-2 py-3 bg-transparent text-white border-2 border-white/30 rounded-xl font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                  >
+                    Previsualizar PDF
+                  </button>
+
+                  <div className="border-t border-white/15 my-4" />
+
+                  <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full py-4 bg-white text-gray-900 rounded-xl font-bold uppercase tracking-widest hover:bg-gray-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full py-4 bg-orange-500 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-orange-400 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {isSubmitting ? (
                       <>
-                        <div className="w-5 h-5 border-2 border-gray-900 border-t-transparent rounded-full animate-spin" />
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         Enviando...
                       </>
                     ) : (
                       'Vista Previa al Envío'
                     )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handlePreviewPdf}
-                    className="w-full mt-3 py-3 bg-transparent text-white border-2 border-white/30 rounded-xl font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-                  >
-                    Previsualizar PDF
                   </button>
                 </>
               )}
