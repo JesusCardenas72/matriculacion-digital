@@ -239,17 +239,12 @@ export default function App() {
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
 
-  // ── Power Automate URLs (hardcoded en el código, editables en src/App.tsx) ──
-  const POWER_AUTOMATE_URL_DUPLICADOS =
-    'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b62c3d4b21d24bda8daa75a8586198eb/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=4nqPljifCY1CBxAiKj03La2YEksNn78meKn9-nlXGCk';
-  const POWER_AUTOMATE_URL =
-    'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ec7a2a1c67974d32ba23de811d20e93d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3G39Rx3ZC55SKVIoBGvRufw-d6J6fYl74GOi46We9f0';
-  const POWER_AUTOMATE_URL_PDF =
-    'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b31521c981d04d95a8a6917a899f3988/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=i6YvgMW9GNJO-1Ynz0A3hAiNPGvZVpXkzbsdoeBYsfU';
+  // ── Endpoints de envío (Netlify Functions → Dataverse) ──────────────────────
+  const POWER_AUTOMATE_URL     = '/.netlify/functions/submit-enrollment';
+  const POWER_AUTOMATE_URL_PDF = '/.netlify/functions/upload-pdf';
 
-  const powerAutomateUrl = POWER_AUTOMATE_URL;
+  const powerAutomateUrl    = POWER_AUTOMATE_URL;
   const powerAutomateUrlPdf = POWER_AUTOMATE_URL_PDF;
-  const powerAutomateUrlDuplicados = POWER_AUTOMATE_URL_DUPLICADOS;
   const [requestNumber, setRequestNumber] = useState<string | null>(null);
 
   const cursos = useMemo(() => {
@@ -571,46 +566,17 @@ export default function App() {
       const now = alreadySubmitted ? submitTimestamp : new Date();
       if (!alreadySubmitted) setSubmitTimestamp(now);
 
-      // ── Llamada 0: pre-check Duplicados + NOrden ─────────────────────
+      // ── Llamada 1: crear registro → Dataverse guarda cr955_norden ──────────────
       let reqNum: string | null = requestNumber;
-      if (!alreadySubmitted && powerAutomateUrlDuplicados) {
-        const pre = await fetch(powerAutomateUrlDuplicados, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nombre: formData.nombre,
-            apellidos: formData.apellidos,
-            dni: formData.dni,
-            especialidad: formData.especialidad,
-            tipoEnsenanza: formData.tipoEnsenanza,
-            curso: formData.curso,
-          }),
-        });
-        if (pre.status === 409) {
-          setSubmitStatus('duplicate');
-          setIsSubmitting(false);
-          return;
-        }
-        if (!pre.ok) throw new Error(`Error en comprobación previa (HTTP ${pre.status})`);
-        const preData = await pre.json();
-        if (preData?.ok === false && preData?.reason === 'duplicate') {
-          setSubmitStatus('duplicate');
-          setIsSubmitting(false);
-          return;
-        }
-        reqNum = preData?.requestNumber ?? null;
-        setRequestNumber(reqNum);
-      }
-
-      // Build the PDF (same file user will download) — incluye N.º si reqNum existe
-      const { bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum);
+      let pdfBytes: Uint8Array;
+      let filename: string;
 
       if (!alreadySubmitted) {
       if (!powerAutomateUrl) {
         console.warn('Power Automate URL not configured. Simulating success.');
         await new Promise(resolve => setTimeout(resolve, 1500));
+        ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
       } else {
-        // ── Llamada 1: enviar datos JSON → obtener rowId ──────────────────
         const ensenanzaCursoPrefix = formData.tipoEnsenanza === 'elemental' ? 'EE' : formData.tipoEnsenanza === 'profesional' ? 'EP' : '';
         const ensenanzaCursoNum = formData.curso.replace(/\D/g, '');
         const ensenanzaCurso = ensenanzaCursoPrefix && ensenanzaCursoNum ? `${ensenanzaCursoPrefix}${ensenanzaCursoNum}` : '';
@@ -629,7 +595,6 @@ export default function App() {
         ];
 
         const jsonPayload = {
-          requestNumber: reqNum ?? '',
           nombre: formData.nombre,
           apellidos: formData.apellidos,
           dni: formData.dni,
@@ -667,7 +632,6 @@ export default function App() {
           importe1erPago: formData.importe1erPago ?? '',
           importe2oPago: formData.importe2oPago ?? '',
           estado: 'Recibida',
-          nOrden: reqNum?.split('-').pop() || '',
           asignaturas: asignaturasParaDataverse
         };
 
@@ -684,9 +648,20 @@ export default function App() {
         if (!res1.ok) throw new Error(`Error al crear el registro (HTTP ${res1.status})`);
 
         const data1 = await res1.json();
+        if (data1?.ok === false && data1?.reason === 'duplicate') {
+          setSubmitStatus('duplicate');
+          setIsSubmitting(false);
+          return;
+        }
         const rowId: string = data1?.rowId;
-        const nOrden: number | string | undefined = reqNum ?? data1?.nOrden;
+        const nOrden: number = typeof data1?.nOrden === 'number' ? data1.nOrden : parseInt(String(data1?.nOrden ?? '0'), 10);
         if (!rowId) throw new Error('No se recibió rowId del servidor');
+
+        // El número de orden viene del backend (cr955_norden en Dataverse) → usarlo en el PDF
+        reqNum = String(nOrden);
+        setRequestNumber(reqNum);
+
+        ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
 
         // ── Llamada 2: subir el PDF en Base64 ────────────────────────────
         const REDUCCION_LABEL: Record<string, string> = {
@@ -711,7 +686,7 @@ export default function App() {
           body: JSON.stringify({
             rowId,
             nOrden,
-            requestNumber: reqNum ?? '',
+            requestNumber: reqNum,
             fileName: filename,
             mimeType: 'application/pdf',
             contentBase64: uint8ToBase64(pdfBytes),
@@ -748,7 +723,10 @@ export default function App() {
         });
         if (!res2.ok) throw new Error(`Error al subir el PDF (HTTP ${res2.status})`);
       }
-      } // end if (!alreadySubmitted)
+      } else {
+        // Re-descarga: reconstruir el PDF con el número de orden ya guardado en estado
+        ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
+      }
 
       // Descarga el PDF al usuario (mismo archivo enviado)
       const downloadUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }));
