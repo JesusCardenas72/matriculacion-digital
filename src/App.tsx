@@ -3,28 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { EnrollmentFormData } from './types';
-import { materias, Materia } from './data/materias';
+import { loadMaterias, buildMateriasIndex, getMaterias, queryMateriasCurso, queryMateriasPrevias, MateriasIndex, Materia } from './data/materias';
 import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, FileText, Download, Paperclip, X, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { pdf } from '@react-pdf/renderer';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+const loadPdfModule = () => import('@react-pdf/renderer');
+const loadPdfLib = () => import('pdf-lib');
 import { MatriculaPdf } from './MatriculaPdf';
 import logoCpm from './assets/logo_cpm.png';
 import logoJccm from './assets/logo_jccm.png';
+import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, validateDNI, validateEmail, validateCP, validateTelefono, sanitize } from './constants';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PROFILE_SPECIFIC_SUBJECTS = [
-  'Fundamentos de Composición',
-  'Improvisación',
-  'Informática musical',
-  'Didáctica de la Música',
-  'Didáctica musical',
-  'Coro',
-  'Música moderna'
-];
+type FieldError = { key: string; message: string };
 
 export default function App() {
   const [formData, setFormData] = useState<EnrollmentFormData>({
@@ -77,78 +70,64 @@ export default function App() {
   const [convalidacionModalView, setConvalidacionModalView] = useState<'types' | 'ministerio'>('types');
   const [convalidacionSubjectContext, setConvalidacionSubjectContext] = useState<'doble' | 'eso_bach'>('doble');
 
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [materiasIndex, setMateriasIndex] = useState<MateriasIndex | null>(null);
+  const [materiasLoading, setMateriasLoading] = useState(true);
+
+  useEffect(() => {
+    loadMaterias()
+      .then(data => setMateriasIndex(buildMateriasIndex(data)))
+      .catch(() => setMateriasIndex(null))
+      .finally(() => setMateriasLoading(false));
+  }, []);
+
+  const validateField = useCallback((name: string, value: string) => {
+    let error: string | null = null;
+    const trimmed = value.trim();
+
+    switch (name) {
+      case 'dni':
+        error = validateDNI(trimmed);
+        break;
+      case 'email':
+        error = validateEmail(trimmed);
+        break;
+      case 'codigoPostal':
+        error = validateCP(trimmed);
+        break;
+      case 'telefono':
+        error = validateTelefono(trimmed);
+        break;
+    }
+
+    setFieldErrors(prev => {
+      if (!error) {
+        if (!prev[name]) return prev;
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      }
+      return { ...prev, [name]: error };
+    });
+  }, []);
+
   const handleValidationClose = () => {
     setShowValidationModal(false);
     if (validationErrors.length > 0) {
       const firstErrorKey = validationErrors[0].key;
-      const element = document.getElementsByName(firstErrorKey)[0];
-      if (element) {
+      const ref = fieldRefs[firstErrorKey];
+      if (ref) {
         setTimeout(() => {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          element.focus({ preventScroll: true });
+          ref.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          ref.focus({ preventScroll: true });
         }, 300);
       }
     }
   };
 
-  const ARTICLE_TEXTS = {
-    apertura_expediente: {
-      title: 'Artículo 12. Apertura de expediente académico',
-      text: '1. El alumnado que se matricule por primera vez en un centro público para cursar enseñanzas elementales o profesionales de música o de danza, o que inicie una nueva enseñanza o especialidad, deberá abonar el precio público por apertura de expediente académico previsto en esta orden.'
-    },
-    fam_num: {
-      title: 'Artículo 14. Alumnado miembro de familia numerosa',
-      text: '1. De conformidad con la Ley 40/2003, de 18 de noviembre, de Protección a las Familias Numerosas:\n\na) El alumnado miembro de familia numerosa clasificada en la categoría especial estará exento del pago de los precios públicos previstos en esta orden.\n\nb) El alumnado miembro de familia numerosa clasificada en la categoría general tendrá una bonificación del cincuenta por ciento de los precios públicos previstos en esta orden.'
-    },
-    discapacidad: {
-      title: 'Artículo 15. Alumnado con discapacidad',
-      text: '1. Está exento del pago de los precios públicos previstos en esta orden el alumnado que tenga reconocido un grado de discapacidad igual o superior al 33 por ciento en los términos previstos en el artículo 4.2 del Texto Refundido de la Ley General de derechos de las personas con discapacidad y de su inclusión social, aprobado por Real Decreto Legislativo 1/2013, de 29 de noviembre.'
-    },
-    terrorismo: {
-      title: 'Artículo 16. Víctimas de actos terroristas',
-      text: '1. Está exento del pago de los precios públicos previstos en esta orden el alumnado que haya sido víctima de actos terroristas o sea hijo o cónyuge no separado legalmente de fallecidos o heridos en actos terroristas, de conformidad con el artículo 38 de la Ley 29/2011, de 22 de septiembre, de Reconocimiento y Protección Integral a las víctimas del Terrorismo.'
-    },
-    violencia_genero: {
-      title: 'Artículo 17. Víctimas de violencia de género',
-      text: '1. De conformidad con la Ley Orgánica 1/2004, de 28 de diciembre, de Medidas de Protección Integral contra la Violencia de Género, está exento del pago de los precios públicos previstos en esta orden el alumnado víctima de violencia de género, así como el alumnado menor de 25 años cuyas progenitoras la sufran.'
-    },
-    ingreso_minimo: {
-      title: 'Artículo 18. Familias perceptoras del ingreso mínimo de solidaridad',
-      text: '1. Está exento del pago de los precios públicos previstos en esta orden el alumnado perteneciente a familias con renta familiar igual o inferior a la renta que da derecho a la percepción del ingreso mínimo de solidaridad, según lo previsto en la disposición adicional vigesimosexta Ley 7/2017, de 21 de diciembre, de Presupuestos Generales de la Junta de Comunidades de Castilla-La Mancha para 2018.'
-    },
-    matricula_honor: {
-      title: 'Artículo 13. Alumnado con matrícula de honor y premios extraordinarios.',
-      text: '3. En las enseñanzas artísticas profesionales cursadas en centros públicos dependientes de la consejería con competencias en materia de educación, la obtención de matrícula de honor en una o más asignaturas dará derecho al alumnado, en el curso académico inmediatamente posterior de la misma enseñanza, a una exención del pago en primera matrícula equivalente al importe correspondiente al número de asignaturas en que haya obtenido dicha calificación.'
-    }
-  };
-
-  const FEES = {
-    elemental: {
-      pruebaAcceso: 0,
-      aperturaExpediente: 25,
-      serviciosGenerales: 10,
-      precioAsignatura: 47,
-      cursos: {
-        '1º': 94,
-        '2º': 94,
-        '3º': 188,
-        '4º': 188,
-      }
-    },
-    profesional: {
-      pruebaAcceso: 40,
-      aperturaExpediente: 25,
-      serviciosGenerales: 10,
-      precioAsignatura: 58,
-      cursos: {
-        '1º': 232,
-        '2º': 232,
-        '3º': 348,
-        '4º': 348,
-        '5º': 348,
-        '6º': 348,
-      }
-    }
+  const fieldRefs = useRef<Record<string, HTMLElement>>({});
+  const registerFieldRef = (name: string) => (el: HTMLElement | null) => {
+    if (el) fieldRefs.current[name] = el;
   };
 
   const calculation = useMemo(() => {
@@ -254,92 +233,48 @@ export default function App() {
   }, [formData.tipoEnsenanza]);
 
   const asignaturasCursoActual = useMemo(() => {
-    if (!formData.especialidad || !formData.curso || !formData.tipoEnsenanza) return [];
-    
-    const cursoNum = parseInt(formData.curso);
-    const tipoStr = formData.tipoEnsenanza === 'profesional' ? 'Profesional' : 'Elemental';
+    if (!formData.especialidad || !formData.curso || !formData.tipoEnsenanza || !materiasIndex) return [];
+    const all = queryMateriasCurso(materiasIndex, formData.especialidad, formData.curso, formData.tipoEnsenanza as 'elemental' | 'profesional');
     const is5o6 = (formData.curso.includes('5') || formData.curso.includes('6')) && formData.tipoEnsenanza === 'profesional';
-    
-    return materias.filter(m => {
-      const mTipo = m.ENSEÑANZAS;
-      const mEsp = m.ESPECIALIDAD;
-      const mCursoNum = parseInt(m.CURSO_N);
-      const mDesc = m.DESCRIPCION;
-      
-      const isEspMatch = mEsp.toLowerCase().includes(formData.especialidad.toLowerCase()) || 
-                         formData.especialidad.toLowerCase().includes(mEsp.toLowerCase());
-      
-      if (mTipo !== tipoStr || !isEspMatch || mCursoNum !== cursoNum) return false;
+    if (!is5o6) return all;
 
-      // Filter by profile for 5th and 6th Professional
-      if (is5o6) {
-        // Perfil A (5º y 6º): Fundamentos de Composición
-        // Perfil B 5º: Improvisación + Informática musical
-        // Perfil B 6º: Improvisación + Didáctica musical
-        // Perfil C 5º: Improvisación + Coro
-        // Perfil C 6º: Música moderna + Coro
-        const is6th = formData.curso.includes('6');
-        const profileSubjects: Record<string, string[]> = is6th
-          ? {
-              'A': ['Fundamentos de Composición'],
-              'B': ['Improvisación', 'Didáctica de la Música', 'Didáctica musical'],
-              'C': ['Música moderna', 'Coro']
-            }
-          : {
-              'A': ['Fundamentos de Composición'],
-              'B': ['Improvisación', 'Informática musical'],
-              'C': ['Improvisación', 'Coro']
-            };
-
-        const allProfileSpecificSubjects = [
-          'Fundamentos de Composición',
-          'Improvisación',
-          'Informática musical',
-          'Didáctica de la Música',
-          'Didáctica musical',
-          'Coro',
-          'Música moderna'
-        ];
-        
-        // If it's a profile-specific subject, check if it matches the selected profile
-        const isProfileSpecific = allProfileSpecificSubjects.some(s => 
-          mDesc.toLowerCase().includes(s.toLowerCase())
-        );
-
-        if (isProfileSpecific) {
-          if (!formData.perfilProfesional) return false; // Hide all profile subjects if no profile selected
-          const allowedForProfile = profileSubjects[formData.perfilProfesional] || [];
-          return allowedForProfile.some(s => mDesc.toLowerCase().includes(s.toLowerCase()));
+    const is6th = formData.curso.includes('6');
+    const profileSubjects: Record<string, string[]> = is6th
+      ? {
+          'A': ['Fundamentos de Composición'],
+          'B': ['Improvisación', 'Didáctica de la Música', 'Didáctica musical'],
+          'C': ['Música moderna', 'Coro']
         }
+      : {
+          'A': ['Fundamentos de Composición'],
+          'B': ['Improvisación', 'Informática musical'],
+          'C': ['Improvisación', 'Coro']
+        };
+
+    return all.filter(m => {
+      const mDesc = m.DESCRIPCION;
+      const isProfileSpecific = PROFILE_SPECIFIC_SUBJECTS.some(s =>
+        mDesc.toLowerCase().includes(s.toLowerCase())
+      );
+      if (isProfileSpecific) {
+        if (!formData.perfilProfesional) return false;
+        const allowed = profileSubjects[formData.perfilProfesional] || [];
+        return allowed.some(s => mDesc.toLowerCase().includes(s.toLowerCase()));
       }
-      
       return true;
     });
-  }, [formData.especialidad, formData.curso, formData.tipoEnsenanza, formData.perfilProfesional]);
+  }, [formData.especialidad, formData.curso, formData.tipoEnsenanza, formData.perfilProfesional, materiasIndex]);
 
   const asignaturasPrevias = useMemo(() => {
-    if (!formData.especialidad || !formData.curso || !formData.tipoEnsenanza) return [];
-    
+    if (!formData.especialidad || !formData.curso || !formData.tipoEnsenanza || !materiasIndex) return [];
     const cursoNum = parseInt(formData.curso);
-    const tipoStr = formData.tipoEnsenanza === 'profesional' ? 'Profesional' : 'Elemental';
-    
-    return materias.filter(m => {
-      const mTipo = m.ENSEÑANZAS;
-      const mEsp = m.ESPECIALIDAD;
-      const mCursoNum = parseInt(m.CURSO_N);
-      
-      const isEspMatch = mEsp.toLowerCase().includes(formData.especialidad.toLowerCase()) || 
-                         formData.especialidad.toLowerCase().includes(mEsp.toLowerCase());
-      
-      return mTipo === tipoStr && isEspMatch && mCursoNum < cursoNum;
-    }).map(m => {
-      return {
-        id: m.MATERIA,
-        label: `${m.DESCRIPCION} (${m.CURSO_N})`,
-        materiaId: m.MATERIA
-      };
-    }).sort((a, b) => a.label.localeCompare(b.label));
-  }, [formData.especialidad, formData.curso, formData.tipoEnsenanza]);
+    const all = queryMateriasPrevias(materiasIndex, formData.especialidad, cursoNum, formData.tipoEnsenanza as 'elemental' | 'profesional');
+    return all.map(m => ({
+      id: m.MATERIA,
+      label: `${m.DESCRIPCION} (${m.CURSO_N})`,
+      materiaId: m.MATERIA
+    })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [formData.especialidad, formData.curso, formData.tipoEnsenanza, materiasIndex]);
 
   const selectedPendingSubjects = useMemo(() => {
     const selected = [];
@@ -356,12 +291,20 @@ export default function App() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
-    const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+    let val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
     
-    if (name === 'formaPago' && (value === 'unico' || value === 'fraccionado')) {
+    if (typeof val === 'string') {
+      val = sanitize(val);
+    }
+
+    if (name === 'formaPago' && (val === 'unico' || val === 'fraccionado')) {
       if (formData.curso.includes('1º') && !formData.esPrimerAno) {
         setIsAperturaWarningOpen(true);
       }
+    }
+
+    if (typeof val === 'string' && ['dni', 'email', 'codigoPostal', 'telefono'].includes(name)) {
+      validateField(name, val);
     }
 
     setFormData(prev => {
@@ -415,13 +358,18 @@ export default function App() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files: File[] = e.target.files ? Array.from(e.target.files) : [];
+    const validExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|pdf)$/i;
     const validFiles = files.filter(file => {
       const isImage = file.type.startsWith('image/');
       const isPdf = file.type === 'application/pdf';
-      return isImage || isPdf;
+      const extValid = validExtensions.test(file.name);
+      return (isImage || isPdf) && extValid;
     });
-
     setAttachments(prev => [...prev, ...validFiles]);
+    if (validFiles.length < files.length) {
+      setValidationErrors([{ key: 'files', label: 'Algunos archivos han sido rechazados (formato no permitido).' }]);
+      setShowValidationModal(true);
+    }
     e.target.value = '';
   };
 
@@ -460,9 +408,16 @@ export default function App() {
       return;
     }
 
+    const fieldErrorEntries = Object.entries(fieldErrors);
+    if (fieldErrorEntries.length > 0) {
+      setValidationErrors(fieldErrorEntries.map(([key, message]) => ({ key, label: message })));
+      setShowValidationModal(true);
+      return;
+    }
+
     const totalAttachmentSize = attachments.reduce((sum, f) => sum + f.size, 0);
     if (totalAttachmentSize > 9 * 1024 * 1024) {
-      setValidationErrors(['El tamaño total de los documentos adjuntos supera el límite de 9 MB. Por favor, reduce el tamaño o el número de archivos adjuntos.']);
+      setValidationErrors([{ key: 'files', label: 'El tamaño total de los documentos adjuntos supera el límite de 9 MB. Por favor, reduce el tamaño o el número de archivos adjuntos.' }]);
       setShowValidationModal(true);
       return;
     }
@@ -493,6 +448,7 @@ export default function App() {
 
   // ── helper: build the final merged PDF (page 1 = form, rest = attachments) ──
   const buildPdfBytes = async (ts: Date, reqNum: string | null): Promise<{ bytes: Uint8Array; filename: string }> => {
+    const { pdf } = await loadPdfModule();
     const mainBlob = await pdf(
       <MatriculaPdf
         formData={formData}
@@ -514,6 +470,7 @@ export default function App() {
     }
 
     // Merge attachments as subsequent pages
+    const { PDFDocument, StandardFonts, rgb } = await loadPdfLib();
     const mainBytes = new Uint8Array(await mainBlob.arrayBuffer());
     const pdfDoc = await PDFDocument.load(mainBytes);
     const A4W = 595.28, A4H = 841.89;
@@ -664,15 +621,6 @@ export default function App() {
         ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
 
         // ── Llamada 2: subir el PDF en Base64 ────────────────────────────
-        const REDUCCION_LABEL: Record<string, string> = {
-          ninguna:          'Ninguna',
-          fam_num_general:  'Familia Numerosa General',
-          fam_num_especial: 'Familia Numerosa Especial',
-          discapacidad:     'Discapacidad',
-          terrorismo:       'Víctima de Terrorismo',
-          violencia_genero: 'Violencia de Género',
-          ingreso_minimo:   'Ingreso Mínimo de Solidaridad',
-        };
         const perfilEmailLabel =
           formData.perfilProfesional === 'A' ? 'Perfil A — Fundamentos de Composición'
           : formData.perfilProfesional === 'B' ? (formData.curso.includes('5') ? 'Perfil B — Improvisación / Informática Musical' : 'Perfil B — Didáctica Musical / Improvisación')
@@ -716,7 +664,7 @@ export default function App() {
             asignaturasCursoActual: JSON.stringify(asignaturasCursoActual),
             asignaturasPendientes:  JSON.stringify(
               selectedPendingSubjects
-                .map(s => materias.find(m => m.MATERIA === s.id))
+                .map(s => (getMaterias() ?? []).find(m => m.MATERIA === s.id))
                 .filter(Boolean)
             ),
           }),
@@ -881,15 +829,16 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Nombre</label>
-                <input required name="nombre" value={formData.nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Ej: Juan" />
+                <input required name="nombre" value={formData.nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} placeholder="Ej: Juan" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Apellidos</label>
-                <input required name="apellidos" value={formData.apellidos} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Ej: Pérez García" />
+                <input required name="apellidos" value={formData.apellidos} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} placeholder="Ej: Pérez García" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I. / N.I.E.</label>
-                <input required name="dni" value={formData.dni} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="12345678X" />
+                <input required name="dni" value={formData.dni} onChange={handleChange} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.dni ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={10} placeholder="12345678X" />
+                {fieldErrors.dni && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.dni}</p>}
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Fecha de Nacimiento</label>
@@ -897,29 +846,32 @@ export default function App() {
               </div>
               <div className="md:col-span-2 space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Domicilio Actual</label>
-                <input required name="domicilio" value={formData.domicilio} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Calle, número, piso..." />
+                <input required name="domicilio" value={formData.domicilio} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={200} placeholder="Calle, número, piso..." />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Localidad</label>
-                <input required name="localidad" value={formData.localidad} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                <input required name="localidad" value={formData.localidad} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Provincia</label>
-                  <input name="provincia" value={formData.provincia} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                  <input name="provincia" value={formData.provincia} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={50} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">C.P.</label>
-                  <input required name="codigoPostal" value={formData.codigoPostal} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                  <input required name="codigoPostal" value={formData.codigoPostal} onChange={handleChange} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.codigoPostal ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={5} />
+                  {fieldErrors.codigoPostal && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.codigoPostal}</p>}
                 </div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Correo Electrónico</label>
-                <input required type="email" name="email" value={formData.email} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="ejemplo@correo.com" />
+                <input required type="email" name="email" value={formData.email} onChange={handleChange} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.email ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={254} placeholder="ejemplo@correo.com" />
+                {fieldErrors.email && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.email}</p>}
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Teléfono</label>
-                <input required type="tel" name="telefono" value={formData.telefono} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                <input required type="tel" name="telefono" value={formData.telefono} onChange={handleChange} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.telefono ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={15} />
+                {fieldErrors.telefono && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.telefono}</p>}
               </div>
             </div>
 
@@ -992,21 +944,21 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Tutor/a Legal 1 (Apellidos y Nombre)</label>
-                  <input name="tutor1Nombre" value={formData.tutor1Nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                  <input name="tutor1Nombre" value={formData.tutor1Nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
-                  <input name="tutor1Dni" value={formData.tutor1Dni} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                  <input name="tutor1Dni" value={formData.tutor1Dni} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={10} />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Tutor/a Legal 2 (Apellidos y Nombre)</label>
-                  <input name="tutor2Nombre" value={formData.tutor2Nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                  <input name="tutor2Nombre" value={formData.tutor2Nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
-                  <input name="tutor2Dni" value={formData.tutor2Dni} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                  <input name="tutor2Dni" value={formData.tutor2Dni} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={10} />
                 </div>
               </div>
             </div>

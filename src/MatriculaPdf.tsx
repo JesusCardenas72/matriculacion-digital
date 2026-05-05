@@ -95,7 +95,7 @@ const DesgloseRow = ({ label, value, highlight, discount }: { label: string; val
   </View>
 );
 
-export const MatriculaPdf = ({ formData, academicYear, submitTimestamp, asignaturasCursoActual, selectedPendingSubjects, calculation, requestNumber }: MatriculaPdfProps) => {
+const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asignaturasCursoActual, selectedPendingSubjects, calculation, requestNumber }: MatriculaPdfProps) => {
   const fechaFmt = formData.fechaNacimiento ? new Date(formData.fechaNacimiento + 'T12:00:00').toLocaleDateString('es-ES') : '';
 
   const perfilLabel =
@@ -401,3 +401,6 @@ export const MatriculaPdf = ({ formData, academicYear, submitTimestamp, asignatu
     </Document>
   );
 };
+
+const MatriculaPdfMemoized = React.memo(MatriculaPdfComponent);
+export { MatriculaPdfMemoized as MatriculaPdf };

@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": [
+    "shared",
+    "calculadora-tasas",
+    "plan-estudios"
+  ],
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
@@ -19,8 +24,6 @@
     "busboy": "^1.6.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
-    "html2canvas": "^1.4.1",
-    "jspdf": "^4.2.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
     "pdf-lib": "^1.17.1",
