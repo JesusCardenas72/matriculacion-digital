@@ -6,11 +6,12 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { EnrollmentFormData } from './types';
 import { loadMaterias, buildMateriasIndex, getMaterias, queryMateriasCurso, queryMateriasPrevias, MateriasIndex, Materia } from './data/materias';
-import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, FileText, Download, Paperclip, X, ExternalLink } from 'lucide-react';
+import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, FileText, Download, Paperclip, X, ExternalLink, HelpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 const loadPdfModule = () => import('@react-pdf/renderer');
 const loadPdfLib = () => import('pdf-lib');
 import { MatriculaPdf } from './MatriculaPdf';
+import { TutorialPdf } from './TutorialPdf';
 import logoCpm from './assets/logo_cpm.png';
 import logoJccm from './assets/logo_jccm.png';
 import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, validateDNI, validateEmail, validateCP, validateTelefono, sanitize } from './constants';
@@ -514,6 +515,14 @@ export default function App() {
     setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
 
+  const handleDownloadTutorial = async () => {
+    const { pdf } = await loadPdfModule();
+    const blob = await pdf(<TutorialPdf />).toBlob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+
   const handleSendAndDownload = async () => {
     setIsSubmitting(true);
     setSubmitStatus('idle');
@@ -819,11 +828,21 @@ export default function App() {
         <form noValidate onSubmit={handleSubmit} className={`space-y-4 sm:space-y-8 ${viewMode === 'readonly' ? 'pointer-events-none opacity-90' : ''}`}>
           {/* Datos Personales */}
           <section className="bg-white rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
-              <div className="p-2 bg-gray-50 rounded-lg">
-                <User size={20} className="text-gray-600" />
+            <div className="flex items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-2 bg-gray-50 rounded-lg">
+                  <User size={20} className="text-gray-600" />
+                </div>
+                <h2 className="text-base sm:text-xl font-semibold">Datos Personales</h2>
               </div>
-              <h2 className="text-base sm:text-xl font-semibold">Datos Personales</h2>
+              <button
+                type="button"
+                onClick={handleDownloadTutorial}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-all"
+              >
+                <HelpCircle size={14} />
+                Ayuda
+              </button>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
@@ -1984,6 +2003,14 @@ export default function App() {
         <footer className="mt-12 text-center text-gray-400 text-xs pb-12">
           <p>© 2026 Conservatorio Profesional de Música "Marcos Redondo" - Ciudad Real</p>
           <p className="mt-1">Sistema de Matriculación Digital</p>
+          <button
+            type="button"
+            onClick={handleDownloadTutorial}
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:text-gray-900 hover:border-gray-300 transition-all shadow-sm"
+          >
+            <FileText size={14} />
+            Ver Tutorial del Formulario (PDF)
+          </button>
         </footer>
 
       {/* ── Modal: Convalidación (principal) ── */}

@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tutorial Formulario de Matriculación - Conservatorio Marcos Redondo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --primary: #1a365d;
+    --primary-light: #2c5282;
+    --primary-dark: #0f2440;
+    --accent: #c53030;
+    --accent-light: #fc8181;
+    --gold: #d69e2e;
+    --gold-light: #f6e05e;
+    --bg: #fafafa;
+    --bg-light: #f7fafc;
+    --text: #2d3748;
+    --text-light: #718096;
+    --border: #e2e8f0;
+    --white: #ffffff;
+    --success: #38a169;
+    --info: #3182ce;
+    --shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Source Sans 3', ui-sans-serif, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .tutorial-wrapper {
+    max-width: 900px;
+    margin: 0 auto;
+    background: var(--white);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Header */
+  .tutorial-header {
+    background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, var(--primary-light) 100%);
+    padding: 40px 40px 35px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .tutorial-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 5px;
+    background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold));
+  }
+
+  .tutorial-header::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(214,158,46,0.15) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .header-badge {
+    display: inline-block;
+    background: rgba(214,158,46,0.2);
+    border: 1px solid rgba(214,158,46,0.4);
+    color: var(--gold-light);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    margin-bottom: 16px;
+  }
+
+  .tutorial-header h1 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--white);
+    line-height: 1.2;
+    margin-bottom: 8px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .tutorial-header h1 span {
+    display: block;
+    font-size: 28px;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  .tutorial-header .subtitle {
+    font-size: 15px;
+    color: #cbd5e0;
+    font-weight: 400;
+    position: relative;
+    z-index: 1;
+  }
+
+  .tutorial-header .location {
+    font-size: 13px;
+    color: var(--gold);
+    font-weight: 600;
+    margin-top: 6px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Table of Contents */
+  .toc {
+    background: var(--bg-light);
+    border-bottom: 1px solid var(--border);
+    padding: 25px 40px;
+  }
+
+  .toc h2 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .toc h2::before {
+    content: '';
+    width: 4px;
+    height: 20px;
+    background: var(--gold);
+    border-radius: 2px;
+  }
+
+  .toc-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 8px;
+  }
+
+  .toc-list li a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    text-decoration: none;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+  }
+
+  .toc-list li a:hover {
+    background: var(--white);
+    color: var(--primary);
+    box-shadow: var(--shadow);
+  }
+
+  .toc-number {
+    width: 24px;
+    height: 24px;
+    background: var(--primary);
+    color: var(--white);
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* Content */
+  .tutorial-content {
+    padding: 35px 40px;
+  }
+
+  .section {
+    margin-bottom: 35px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--primary);
+  }
+
+  .section-header .number {
+    width: 32px;
+    height: 32px;
+    background: var(--primary);
+    color: var(--white);
+    font-size: 14px;
+    font-weight: 700;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .section-header h2 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary);
+  }
+
+  .section p {
+    font-size: 15px;
+    color: var(--text);
+    margin-bottom: 12px;
+    line-height: 1.7;
+  }
+
+  .section p strong {
+    color: var(--primary);
+  }
+
+  /* Tables */
+  .table-container {
+    overflow-x: auto;
+    margin: 15px 0;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  thead {
+    background: var(--primary);
+  }
+
+  thead th {
+    padding: 12px 15px;
+    text-align: left;
+    color: var(--white);
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr:nth-child(even) {
+    background: var(--bg-light);
+  }
+
+  tbody tr:hover {
+    background: #edf2f7;
+  }
+
+  tbody td {
+    padding: 10px 15px;
+    color: var(--text);
+  }
+
+  /* Lists */
+  .bullet-list {
+    list-style: none;
+    margin: 12px 0;
+    padding-left: 0;
+  }
+
+  .bullet-list li {
+    position: relative;
+    padding-left: 24px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .bullet-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 8px;
+    width: 8px;
+    height: 8px;
+    background: var(--gold);
+    border-radius: 50%;
+  }
+
+  .bullet-list.accent li::before {
+    background: var(--accent);
+  }
+
+  /* Info Boxes */
+  .info-box {
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin: 15px 0;
+    border-left: 4px solid;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .info-box.info {
+    background: #ebf8ff;
+    border-color: var(--info);
+    color: #2c5282;
+  }
+
+  .info-box.warning {
+    background: #fffaf0;
+    border-color: var(--gold);
+    color: #975a16;
+  }
+
+  .info-box.alert {
+    background: #fff5f5;
+    border-color: var(--accent);
+    color: #9b2c2c;
+  }
+
+  .info-box.success {
+    background: #f0fff4;
+    border-color: var(--success);
+    color: #276749;
+  }
+
+  .info-box strong {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .badge-blue { background: #ebf8ff; color: var(--info); }
+  .badge-purple { background: #faf5ff; color: #805ad5; }
+  .badge-orange { background: #fffaf0; color: #dd6b20; }
+  .badge-green { background: #f0fff4; color: var(--success); }
+
+  /* Grid */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin: 15px 0;
+  }
+
+  .grid-card {
+    background: var(--bg-light);
+    border-radius: 8px;
+    padding: 18px;
+    border: 1px solid var(--border);
+  }
+
+  .grid-card h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 10px;
+  }
+
+  /* Footer */
+  .tutorial-footer {
+    background: var(--bg-light);
+    border-top: 1px solid var(--border);
+    padding: 25px 40px;
+    text-align: center;
+  }
+
+  .footer-contact {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+  }
+
+  .footer-contact a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .footer-contact a:hover {
+    color: var(--gold);
+  }
+
+  .footer-text {
+    font-size: 12px;
+    color: var(--text-light);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .tutorial-header { padding: 30px 20px; }
+    .tutorial-header h1 { font-size: 24px; }
+    .tutorial-header h1 span { font-size: 20px; }
+    .toc { padding: 20px; }
+    .toc-list { grid-template-columns: 1fr; }
+    .tutorial-content { padding: 25px 20px; }
+    .section-header h2 { font-size: 18px; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .footer-contact { flex-direction: column; gap: 10px; }
+  }
+
+  /* Print styles */
+  @media print {
+    .tutorial-wrapper { box-shadow: none; }
+    .toc { display: none; }
+    .section { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="tutorial-wrapper">
+  <!-- Header -->
+  <header class="tutorial-header">
+    <div class="header-badge">Guía Completa</div>
+    <h1>Tutorial del Formulario de <span>Matriculación Digital</span></h1>
+    <p class="subtitle">Conservatorio Profesional de Música "Marcos Redondo"</p>
+    <p class="location">Ciudad Real</p>
+  </header>
+
+  <!-- Table of Contents -->
+  <nav class="toc">
+    <h2>Índice</h2>
+    <ul class="toc-list">
+      <li><a href="#introduccion"><span class="toc-number">1</span> Introducción</a></li>
+      <li><a href="#estructura"><span class="toc-number">2</span> Estructura General</a></li>
+      <li><a href="#datos-personales"><span class="toc-number">3</span> Datos Personales</a></li>
+      <li><a href="#menores"><span class="toc-number">4</span> Menores de 18 años</a></li>
+      <li><a href="#matriculacion"><span class="toc-number">5</span> Datos de Matriculación</a></li>
+      <li><a href="#pago"><span class="toc-number">6</span> Forma de Pago</a></li>
+      <li><a href="#convalidaciones"><span class="toc-number">7</span> Convalidaciones</a></li>
+      <li><a href="#envio"><span class="toc-number">8</span> Envío del Formulario</a></li>
+      <li><a href="#documentos"><span class="toc-number">9</span> Documentos Adjuntos</a></li>
+      <li><a href="#contacto"><span class="toc-number">10</span> Información Adicional</a></li>
+    </ul>
+  </nav>
+
+  <!-- Content -->
+  <main class="tutorial-content">
+
+    <!-- Section 1: Introducción -->
+    <section class="section" id="introduccion">
+      <div class="section-header">
+        <div class="number">1</div>
+        <h2>Introducción</h2>
+      </div>
+      <p>Este documento constituye una guía completa para el <strong>formulario de matriculación digital</strong> del Conservatorio Profesional de Música "Marcos Redondo" de Ciudad Real. El formulario está diseñado para gestionar la solicitud de matrícula tanto para <strong>Enseñanzas Elementales</strong> como <strong>Profesionales</strong> de Música.</p>
+      <p><strong>El sistema permite:</strong></p>
+      <ul class="bullet-list">
+        <li>Rellenar y enviar la solicitud de matrícula online</li>
+        <li>Calcular automáticamente las tasas según la normativa vigente (Orden 68/2022)</li>
+        <li>Generar un PDF con todos los datos completados</li>
+        <li>Enviar la solicitud directamente al sistema de gestión del centro</li>
+      </ul>
+    </section>
+
+    <!-- Section 2: Estructura -->
+    <section class="section" id="estructura">
+      <div class="section-header">
+        <div class="number">2</div>
+        <h2>Estructura General del Formulario</h2>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 35%;">Sección</th>
+              <th>Descripción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Datos Personales</strong></td><td>Información básica del alumno/a</td></tr>
+            <tr><td><strong>Menores de 18 años</strong></td><td>Datos de tutores legales (si aplica)</td></tr>
+            <tr><td><strong>Datos de Matriculación</strong></td><td>Tipo enseñanza, curso, especialidad, asignaturas</td></tr>
+            <tr><td><strong>Forma de Pago</strong></td><td>Método de pago, tasas, reducciones</td></tr>
+            <tr><td><strong>Información y Autorizaciones</strong></td><td>Protección de datos, autorización de imagen</td></tr>
+            <tr><td><strong>Documentos Adjuntos</strong></td><td>Archivos opcionales (justificantes, etc.)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 3: Datos Personales -->
+    <section class="section" id="datos-personales">
+      <div class="section-header">
+        <div class="number">3</div>
+        <h2>Sección 1: Datos Personales</h2>
+      </div>
+      <p><strong>Campos Obligatorios:</strong></p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 30%;">Campo</th>
+              <th>Descripción</th>
+              <th style="width: 25%;">Formato</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Nombre</strong></td><td>Nombre completo del alumno/a</td><td>Texto</td></tr>
+            <tr><td><strong>Apellidos</strong></td><td>Apellidos completos</td><td>Texto</td></tr>
+            <tr><td><strong>D.N.I. / N.I.E.</strong></td><td>Documento de identificación</td><td>12345678X</td></tr>
+            <tr><td><strong>Fecha de Nacimiento</strong></td><td>Fecha de nacimiento</td><td>DD/MM/AAAA</td></tr>
+            <tr><td><strong>Domicilio Actual</strong></td><td>Dirección completa</td><td>Calle, nº, piso...</td></tr>
+            <tr><td><strong>Localidad</strong></td><td>Ciudad/población</td><td>Texto</td></tr>
+            <tr><td><strong>Provincia</strong></td><td>Provincia</td><td>Ciudad Real</td></tr>
+            <tr><td><strong>C.P.</strong></td><td>Código postal</td><td>5 dígitos</td></tr>
+            <tr><td><strong>Correo Electrónico</strong></td><td>Email de contacto</td><td>formato@correo.com</td></tr>
+            <tr><td><strong>Teléfono</strong></td><td>Teléfono de contacto</td><td>Número de teléfono</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid-2">
+        <div class="grid-card">
+          <h4>Hora de salida de estudios</h4>
+          <ul class="bullet-list">
+            <li>Antes de las 17 h</li>
+            <li>17 h</li>
+            <li>18 h</li>
+          </ul>
+        </div>
+        <div class="grid-card">
+          <h4>Campos obligatorios</h4>
+          <ul class="bullet-list accent">
+            <li>Disponibilidad horaria de mañana</li>
+            <li>Autorización uso de imagen</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="info-box info">
+        <strong>Autorización de imagen</strong>
+        Regulada por: Art. 18 Constitución Española, Ley 1/1982 sobre derecho al honor, intimidad y propia imagen, Ley 15/1999 de Protección de Datos.
+      </div>
+    </section>
+
+    <!-- Section 4: Menores -->
+    <section class="section" id="menores">
+      <div class="section-header">
+        <div class="number">4</div>
+        <h2>Sección 2: Menores de 18 años</h2>
+      </div>
+      <div class="info-box warning">
+        <strong>Sección opcional</strong>
+        Esta sección solo debe cumplimentarse cuando el/la alumno/a sea menor de edad.
+      </div>
+      <div class="grid-2">
+        <div class="grid-card">
+          <h4>Tutor/a Legal 1</h4>
+          <ul class="bullet-list">
+            <li>Apellidos y Nombre</li>
+            <li>D.N.I.</li>
+          </ul>
+        </div>
+        <div class="grid-card">
+          <h4>Tutor/a Legal 2 (Opcional)</h4>
+          <ul class="bullet-list">
+            <li>Apellidos y Nombre</li>
+            <li>D.N.I.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 5: Datos de Matriculación -->
+    <section class="section" id="matriculacion">
+      <div class="section-header">
+        <div class="number">5</div>
+        <h2>Sección 3: Datos de Matriculación</h2>
+      </div>
+      
+      <p><strong>Tipo de Enseñanza:</strong></p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Opción</th>
+              <th>Cursos disponibles</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Enseñanza Elemental</strong></td><td>1º, 2º, 3º, 4º</td></tr>
+            <tr><td><strong>Enseñanza Profesional</strong></td><td>1º, 2º, 3º, 4º, 5º, 6º</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="info-box alert">
+        <strong>Nota importante</strong>
+        La especialidad de <strong>Canto</strong> no está disponible en Enseñanza Elemental.
+      </div>
+
+      <p><strong>Especialidades Disponibles:</strong></p>
+      <p>Canto, Clarinete, Contrabajo, Fagot, Flauta Travesera, Guitarra, Oboe, Percusión, Piano, Saxofón, Trombón, Trompa, Trompeta, Tuba, Viola, Violín, Violoncello</p>
+
+      <p><strong>Asignaturas Pendientes:</strong></p>
+      <ul class="bullet-list">
+        <li>Asignatura pendiente 1: Obligatoria si hay pendientes</li>
+        <li>Asignatura pendiente 2: Solo en Enseñanza Profesional</li>
+      </ul>
+
+      <div class="info-box warning">
+        <strong>Recargo automático</strong>
+        Las asignaturas pendientes tienen un recargo del 20% sobre el precio base de la asignatura.
+      </div>
+
+      <p><strong>Perfiles Profesionales (Solo 5º y 6º de Profesional):</strong></p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Perfil</th>
+              <th>Descripción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Perfil A</strong></td><td>Fundamentos de Composición</td></tr>
+            <tr><td><strong>Perfil B</strong></td><td>Improvisación / Informática Musical (5º) o Didáctica musical (6º)</td></tr>
+            <tr><td><strong>Perfil C</strong></td><td>Improvisación / Coro 1 (5º) o Música moderna / Coro 2 (6º)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 6: Forma de Pago -->
+    <section class="section" id="pago">
+      <div class="section-header">
+        <div class="number">6</div>
+        <h2>Sección 4: Forma de Pago</h2>
+      </div>
+
+      <p><strong>Tasas Generales (Orden 68/2022):</strong></p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Concepto</th>
+              <th>Importe</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Servicios Generales</td><td><strong>10,00 €</strong></td></tr>
+            <tr><td>Apertura de Expediente (solo primer año)</td><td><strong>25,00 €</strong></td></tr>
+            <tr><td>Prueba de Acceso (solo Profesional)</td><td><strong>40,00 €</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>Tasas por Curso:</strong></p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Nivel</th>
+              <th>Cursos</th>
+              <th>Importe</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Elemental</td><td>1º y 2º</td><td><strong>94 €</strong></td></tr>
+            <tr><td>Elemental</td><td>3º y 4º</td><td><strong>188 €</strong></td></tr>
+            <tr><td>Profesional</td><td>1º y 2º</td><td><strong>232 €</strong></td></tr>
+            <tr><td>Profesional</td><td>3º a 6º</td><td><strong>348 €</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>Precio por Asignatura:</strong></p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Nivel</th>
+              <th>Importe por asignatura</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Elemental</td><td><strong>47 €</strong></td></tr>
+            <tr><td>Profesional</td><td><strong>58 €</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>Opciones de Pago:</strong></p>
+      <ul class="bullet-list">
+        <li><strong>Pago Único:</strong> Total a ingresar en un solo pago</li>
+        <li><strong>Pago Fraccionado:</strong> Dos pagos (1er plazo + 2º plazo en diciembre)</li>
+        <li><strong>Solicita Beca:</strong> Solo disponible en Profesional. Requiere justificante de registro de beca</li>
+      </ul>
+
+      <p><strong>Reducciones y Exenciones:</strong></p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Tipo de Reducción</th>
+              <th>Descuento</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Ninguna</td><td>0%</td></tr>
+            <tr><td>Familia Numerosa General</td><td><strong>50%</strong></td></tr>
+            <tr><td>Familia Numerosa Especial</td><td><strong>100% (exento)</strong></td></tr>
+            <tr><td>Discapacidad ≥ 33%</td><td><strong>100% (exento)</strong></td></tr>
+            <tr><td>Víctima de Terrorismo</td><td><strong>100% (exento)</strong></td></tr>
+            <tr><td>Víctima de Violencia de Género</td><td><strong>100% (exento)</strong></td></tr>
+            <tr><td>Ingreso Mínimo de Solidaridad</td><td><strong>100% (exento)</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="info-box info">
+        <strong>Matrícula de Honor</strong>
+        Bonificación adicional de <strong>58 €</strong> equivalente al precio de una asignatura. Acumulable solo con: Ninguna reducción o Familia Numerosa General.
+      </div>
+
+      <p><strong>Modelo 046:</strong></p>
+      <p>Para realizar el pago de tasas, es necesario utilizar el <strong>Modelo 046</strong> de la Junta de Comunidades de Castilla-La Mancha.</p>
+      <div class="info-box success">
+        <strong>Datos para cumplimentar:</strong>
+        Consejería: CONSEJERÍA DE EDUCACIÓN, CULTURA Y DEPORTES<br>
+        Órgano Gestor: DELG. PROV. DE EDUCACIÓN, CULTURA Y DEP. CIUDAD REAL<br>
+        Concepto: 2032 – PRECIO PÚBLICO DE ENSEÑANZAS DE IDIOMAS, MÚSICA, DANZA Y DISEÑO
+      </div>
+    </section>
+
+    <!-- Section 7: Convalidaciones -->
+    <section class="section" id="convalidaciones">
+      <div class="section-header">
+        <div class="number">7</div>
+        <h2>Convalidaciones de Asignaturas</h2>
+      </div>
+
+      <p><strong>1. Doble Especialidad o Similar:</strong></p>
+      <ul class="bullet-list">
+        <li>Para asignaturas ya cursadas y superadas con coincidencia en denominación y curso</li>
+        <li>Supone reducción en tasas (47 € Elemental, 58 € Profesional por asignatura)</li>
+        <li>Excepciones: Orquesta/Banda y Música de Cámara</li>
+      </ul>
+
+      <p><strong>2. Asignaturas de ESO y Bachillerato:</strong></p>
+      <ul class="bullet-list">
+        <li>Convalidación con materias del sistema educativo general</li>
+        <li>Supone reducción en tasas</li>
+        <li>Requiere certificado académico oficial</li>
+      </ul>
+
+      <p><strong>3. Otros Estudios o Planes Anteriores:</strong></p>
+      <ul class="bullet-list">
+        <li>Estudios de planes antiguos no reconocibles directamente</li>
+        <li>No supone reducción inmediata en tasas</li>
+        <li>Requiere tramitación ante el Ministerio de Educación</li>
+      </ul>
+    </section>
+
+    <!-- Section 8: Envío -->
+    <section class="section" id="envio">
+      <div class="section-header">
+        <div class="number">8</div>
+        <h2>Envío del Formulario</h2>
+      </div>
+
+      <p><strong>Proceso de Envío:</strong></p>
+      <ul class="bullet-list">
+        <li><strong>Previsualizar PDF:</strong> Ver el documento antes de enviar</li>
+        <li><strong>Vista Previa al Envío:</strong> Validación de campos obligatorios</li>
+        <li><strong>Enviar y Descargar:</strong> Envía datos al sistema y descarga PDF</li>
+      </ul>
+
+      <p><strong>Estados de Envío:</strong></p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Estado</th>
+              <th>Significado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="badge badge-blue">Idle</span></td><td>Formulario listo para enviar</td></tr>
+            <tr><td><span class="badge badge-orange">Enviando</span></td><td>Proceso de envío en curso</td></tr>
+            <tr><td><span class="badge badge-green">Success</span></td><td>Envío exitoso</td></tr>
+            <tr><td><span class="badge badge-purple">Error</span></td><td>Error en el envío</td></tr>
+            <tr><td><span class="badge badge-orange">Duplicate</span></td><td>Ya existe una solicitud con los mismos datos</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 9: Documentos -->
+    <section class="section" id="documentos">
+      <div class="section-header">
+        <div class="number">9</div>
+        <h2>Documentos Adjuntos</h2>
+      </div>
+      <p>Archivos permitidos: <strong>Imágenes (JPG, PNG)</strong> y <strong>PDF</strong>. Tamaño máximo total: <strong>9 MB</strong>.</p>
+      
+      <p><strong>Documentación según situación:</strong></p>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Situación</th>
+              <th>Documentación requerida</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Familia numerosa</td><td>Título de familia numerosa</td></tr>
+            <tr><td>Discapacidad</td><td>Certificado de discapacidad ≥ 33%</td></tr>
+            <tr><td>Víctima de terrorismo</td><td>Certificado de víctima de terrorismo</td></tr>
+            <tr><td>Violencia de género</td><td>Orden de protección o sentencia</td></tr>
+            <tr><td>Pago de tasas</td><td>Justificante del Modelo 046</td></tr>
+            <tr><td>Convalidación</td><td>Certificado académico oficial</td></tr>
+            <tr><td>Beca</td><td>Justificante de registro de beca</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section 10: Información Adicional -->
+    <section class="section" id="contacto">
+      <div class="section-header">
+        <div class="number">10</div>
+        <h2>Información Adicional y Contacto</h2>
+      </div>
+
+      <div class="info-box info">
+        <strong>Contacto con el Conservatorio</strong>
+        Teléfono: 926 274 154<br>
+        Email: 13004341.cpm@educastillalamancha.es
+      </div>
+
+      <p><strong>Normativa Aplicable:</strong></p>
+      <ul class="bullet-list">
+        <li>Orden 68/2022 de 21 de marzo, por la que se regulan los precios públicos de las enseñanzas artísticas</li>
+        <li>Ley 40/2003 de Protección a las Familias Numerosas</li>
+        <li>Ley Orgánica 1/2004 de Medidas de Protección Integral contra la Violencia de Género</li>
+        <li>Ley 29/2011 de Reconocimiento y Protección Integral a las víctimas del Terrorismo</li>
+      </ul>
+
+      <p><strong>Recomendaciones:</strong></p>
+      <ul class="bullet-list">
+        <li>Revisar todos los datos antes de enviar</li>
+        <li>Guardar el PDF descargado como comprobante</li>
+        <li>Adjuntar documentación acreditativa cuando sea necesario</li>
+        <li>Conservar el justificante de pago del Modelo 046</li>
+        <li>Contactar con secretaría si hay alguna duda</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="tutorial-footer">
+    <div class="footer-contact">
+      <a href="tel:926274154">📞 926 274 154</a>
+      <a href="mailto:13004341.cpm@educastillalamancha.es">✉️ 13004341.cpm@educastillalamancha.es</a>
+    </div>
+    <p class="footer-text">Conservatorio Profesional de Música "Marcos Redondo" - Ciudad Real | Año académico vigente</p>
+  </footer>
+</div>
+
+</body>
+</html>
