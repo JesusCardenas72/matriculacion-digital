@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* Neumorphic Toggle Switch */
+.toggle-label {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  color: #394a56;
+  gap: 14px;
+}
+
+.toggle {
+  isolation: isolate;
+  position: relative;
+  height: 1.4em;
+  width: 2.8em;
+  flex-shrink: 0;
+  border-radius: 0.7em;
+  overflow: hidden;
+  box-shadow: -0.3em -0.15em 0.5em 0px #ffffff,
+    0.3em 0.15em 0.6em 0px #d1d9e6,
+    0.15em 0.15em 0.2em 0px #d1d9e6 inset,
+    -0.15em -0.15em 0.2em 0px #ffffff inset;
+}
+
+.toggle-state {
+  display: none;
+}
+
+.indicator {
+  height: 100%;
+  width: 200%;
+  background: #ecf0f3;
+  border-radius: 0.7em;
+  transform: translate3d(-75%, 0, 0);
+  transition: transform 0.4s cubic-bezier(0.85, 0.05, 0.18, 1.35);
+  box-shadow: -0.3em -0.15em 0.5em 0px #ffffff,
+    0.3em 0.15em 0.6em 0px #d1d9e6;
+}
+
+.toggle-state:checked ~ .indicator {
+  transform: translate3d(25%, 0, 0);
+  background: #d1e8d1;
+}
+
+/* Modelo 046 Button */
+.btn-modelo046,
+a.btn-modelo046 {
+  text-decoration: none;
+}
+
+.btn-modelo046 {
+  --primary-color: #111827;
+  --secondary-color: #fff;
+  --hover-color: #111;
+  --arrow-width: 10px;
+  --arrow-stroke: 2px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 20px;
+  color: var(--secondary-color);
+  padding: 1em 1.8em;
+  background: var(--primary-color);
+  display: flex;
+  transition: 0.2s background;
+  align-items: center;
+  gap: 0.6em;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-modelo046 .arrow-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.btn-modelo046 .arrow {
+  margin-top: 1px;
+  width: var(--arrow-width);
+  background: var(--secondary-color);
+  height: var(--arrow-stroke);
+  position: relative;
+  transition: 0.2s;
+}
+
+.btn-modelo046 .arrow::before {
+  content: "";
+  box-sizing: border-box;
+  position: absolute;
+  border: solid var(--secondary-color);
+  border-width: 0 var(--arrow-stroke) var(--arrow-stroke) 0;
+  display: inline-block;
+  top: -3px;
+  right: 3px;
+  transition: 0.2s;
+  padding: 3px;
+  transform: rotate(-45deg);
+}
+
+.btn-modelo046:hover {
+  background-color: var(--hover-color);
+}
+
+.btn-modelo046:hover .arrow {
+  background: var(--secondary-color);
+}
+
+.btn-modelo046:hover .arrow::before {
+  right: 0;
+}
