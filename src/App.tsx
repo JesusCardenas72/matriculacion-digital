@@ -219,9 +219,9 @@ export default function App() {
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
 
-  // ── Endpoints de envío (Netlify Functions → Dataverse) ──────────────────────
-  const POWER_AUTOMATE_URL     = '/.netlify/functions/submit-enrollment';
-  const POWER_AUTOMATE_URL_PDF = '/.netlify/functions/upload-pdf';
+  // ── Endpoints de envío (Vercel API Routes → Dataverse) ──────────────────────
+  const POWER_AUTOMATE_URL     = '/api/submit-enrollment';
+  const POWER_AUTOMATE_URL_PDF = '/api/upload-pdf';
 
   const powerAutomateUrl    = POWER_AUTOMATE_URL;
   const powerAutomateUrlPdf = POWER_AUTOMATE_URL_PDF;
