@@ -2,6 +2,9 @@ import type { IncomingMessage, ServerResponse } from 'http';
 
 // ── Power Automate webhook URLs ───────────────────────────────────────────────
 
+const PA_WEBHOOK_DUPLICADOS_URL = process.env.PA_WEBHOOK_DUPLICADOS_URL ??
+  'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b62c3d4b21d24bda8daa75a8586198eb/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=4nqPljifCY1CBxAiKj03La2YEksNn78meKn9-nlXGCk';
+
 const PA_WEBHOOK_URL = process.env.PA_WEBHOOK_DATOS_URL ??
   'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ec7a2a1c67974d32ba23de811d20e93d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3G39Rx3ZC55SKVIoBGvRufw-d6J6fYl74GOi46We9f0';
 
@@ -41,28 +44,61 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
   try {
     const rawBody = await readBody(req);
+    const body = JSON.parse(rawBody) as Record<string, unknown>;
 
-    // Reenviar tal cual al webhook de Power Automate
+    // ── Paso 1: comprobar duplicados y obtener nOrden ─────────────────────────
+    const dupRes = await fetch(PA_WEBHOOK_DUPLICADOS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre:        body.nombre,
+        apellidos:     body.apellidos,
+        dni:           body.dni,
+        especialidad:  body.especialidad,
+        tipoEnsenanza: body.tipoEnsenanza,
+        curso:         body.curso,
+      }),
+    });
+
+    if (dupRes.status === 409) {
+      const dupData = await dupRes.text();
+      try {
+        sendJson(res, 409, JSON.parse(dupData));
+      } catch {
+        sendJson(res, 409, { ok: false, reason: 'duplicate' });
+      }
+      return;
+    }
+
+    if (!dupRes.ok) {
+      const errText = await dupRes.text();
+      console.error(`Duplicados+NOrden error ${dupRes.status}: ${errText}`);
+      sendJson(res, dupRes.status, { ok: false, error: errText });
+      return;
+    }
+
+    const dupData = await dupRes.json() as { ok?: boolean; requestNumber?: string };
+    // requestNumber tiene formato "YYYY-YYYY+1-N" (ej. "2026-2027-5")
+    const requestNumber = dupData.requestNumber ?? '';
+    const parts = requestNumber.split('-');
+    const nOrden = parseInt(parts[parts.length - 1] ?? '1', 10) || 1;
+
+    // ── Paso 2: crear el registro con el nOrden calculado ─────────────────────
     const paRes = await fetch(PA_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: rawBody,
+      body: JSON.stringify({ ...body, nOrden: String(nOrden) }),
     });
 
     const paData = await paRes.text();
 
-    // Power Automate devuelve 200 con { ok, rowId, nOrden } o 202 si está procesando
     if (paRes.status === 200 || paRes.status === 202) {
-      // Intentar parsear la respuesta de PA
       try {
-        const parsed = JSON.parse(paData);
-        sendJson(res, 200, parsed);
+        const parsed = JSON.parse(paData) as { rowId?: string };
+        sendJson(res, 200, { ok: true, rowId: parsed.rowId, nOrden });
       } catch {
-        // Si PA no devuelve JSON válido, devolver éxito genérico
-        sendJson(res, 200, { ok: true });
+        sendJson(res, 200, { ok: true, nOrden });
       }
-    } else if (paRes.status === 409) {
-      sendJson(res, 409, JSON.parse(paData));
     } else {
       console.error(`Power Automate error ${paRes.status}: ${paData}`);
       sendJson(res, paRes.status, { ok: false, error: paData });
