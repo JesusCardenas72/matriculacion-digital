@@ -350,6 +350,28 @@ export default function App() {
     });
   };
 
+  const handleDniBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    const raw = e.target.value.trim().toUpperCase();
+    if (!raw) return;
+    const LETTERS = 'TRWAGMYFPDXBNJZSQVHLCKE';
+    let formatted = raw;
+
+    if (/^\d{1,8}$/.test(raw)) {
+      const padded = raw.padStart(8, '0');
+      formatted = padded + LETTERS[parseInt(padded, 10) % 23];
+    } else if (/^[XYZ]\d{1,7}$/.test(raw)) {
+      const prefix = raw[0];
+      const numStr = raw.slice(1).padStart(7, '0');
+      const prefixVal = ({ X: 0, Y: 1, Z: 2 } as Record<string, number>)[prefix];
+      formatted = prefix + numStr + LETTERS[(prefixVal * 10000000 + parseInt(numStr, 10)) % 23];
+    }
+
+    if (formatted !== e.target.value) {
+      setFormData(prev => ({ ...prev, dni: formatted }));
+      validateField('dni', formatted);
+    }
+  }, [validateField]);
+
   const renderConvalidacionRow = (count: number, discount: number) => (
     <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
       <span>{`Convalidación (${count} asig.)`}</span>
@@ -360,12 +382,21 @@ export default function App() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files: File[] = e.target.files ? Array.from(e.target.files) : [];
     const validExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|pdf)$/i;
+    const MAX_TOTAL_SIZE = 5 * 1024 * 1024;
     const validFiles = files.filter(file => {
       const isImage = file.type.startsWith('image/');
       const isPdf = file.type === 'application/pdf';
       const extValid = validExtensions.test(file.name);
       return (isImage || isPdf) && extValid;
     });
+    const currentTotal = attachments.reduce((sum, f) => sum + f.size, 0);
+    const newTotal = validFiles.reduce((sum, f) => sum + f.size, currentTotal);
+    if (newTotal > MAX_TOTAL_SIZE) {
+      setValidationErrors([{ key: 'files', label: 'El tamaño total de los documentos adjuntos no puede superar 5 MB.' }]);
+      setShowValidationModal(true);
+      e.target.value = '';
+      return;
+    }
     setAttachments(prev => [...prev, ...validFiles]);
     if (validFiles.length < files.length) {
       setValidationErrors([{ key: 'files', label: 'Algunos archivos han sido rechazados (formato no permitido).' }]);
@@ -417,8 +448,8 @@ export default function App() {
     }
 
     const totalAttachmentSize = attachments.reduce((sum, f) => sum + f.size, 0);
-    if (totalAttachmentSize > 9 * 1024 * 1024) {
-      setValidationErrors([{ key: 'files', label: 'El tamaño total de los documentos adjuntos supera el límite de 9 MB. Por favor, reduce el tamaño o el número de archivos adjuntos.' }]);
+    if (totalAttachmentSize > 5 * 1024 * 1024) {
+      setValidationErrors([{ key: 'files', label: 'El tamaño total de los documentos adjuntos supera el límite de 5 MB. Por favor, reduce el tamaño o el número de archivos adjuntos.' }]);
       setShowValidationModal(true);
       return;
     }
@@ -856,7 +887,7 @@ export default function App() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I. / N.I.E.</label>
-                <input required name="dni" value={formData.dni} onChange={handleChange} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.dni ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={10} placeholder="12345678X" />
+                <input required name="dni" value={formData.dni} onChange={handleChange} onBlur={handleDniBlur} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.dni ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={10} placeholder="12345678X" />
                 {fieldErrors.dni && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.dni}</p>}
               </div>
               <div className="space-y-1">
@@ -1889,7 +1920,7 @@ export default function App() {
                   <div className="mb-6 pb-6 border-b border-white/10">
                     <label className="flex items-center gap-2 text-sm font-semibold text-gray-300 mb-4 cursor-pointer">
                       <Paperclip size={18} className="text-gray-400" />
-                      Documentos Adjuntos (Opcional)
+                      Documentos Adjuntos (Opcional - máx 5Mb.)
                     </label>
                     <p className="text-xs text-gray-400 mb-4">Se aceptan archivos de imagen (JPG, PNG, etc.) y PDF</p>
 
