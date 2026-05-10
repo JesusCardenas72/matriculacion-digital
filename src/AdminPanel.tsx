@@ -18,7 +18,9 @@ interface Solicitud {
   nombre: string;
   curso: string;
   especialidad: string;
-  orden: number;
+  orden: string | number;
+  esAmpliacion?: boolean;
+  ordenOriginal?: string | number;
 }
 
 interface Asig {
@@ -30,7 +32,7 @@ interface Asig {
 // ─── Static data ──────────────────────────────────────────────────────────────
 
 const SOLICITUDES: Solicitud[] = [
-  { id: 1, nombre: 'JESÚS-MARÍA CÁRDENAS IGLESIAS', curso: 'EP5', especialidad: 'Oboe', orden: 1 },
+  { id: 1, nombre: 'JESÚS-MARÍA CÁRDENAS IGLESIAS', curso: 'EP5', especialidad: 'Oboe', orden: '1,1', esAmpliacion: true, ordenOriginal: 1 },
   { id: 2, nombre: 'Alonso Garcilaso Mendoza', curso: 'EE2', especialidad: 'Trompa', orden: 3 },
   { id: 3, nombre: 'Jesús María Quijano', curso: 'EP2', especialidad: 'Tuba', orden: 4 },
   { id: 4, nombre: 'María Vega Rodríguez', curso: 'EP3', especialidad: 'Violín', orden: 7 },
@@ -121,6 +123,19 @@ function SectionHead({
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getDisplayOrden(s: Solicitud): string {
+  if (s.esAmpliacion && s.ordenOriginal !== undefined) {
+    return String(s.ordenOriginal);
+  }
+  const str = String(s.orden);
+  if (str.includes(',')) {
+    return str.split(',')[0];
+  }
+  return str;
+}
+
 // ─── Detail panel (tabs: tram / val / done) ───────────────────────────────────
 
 function DetailPanel({ sel }: { sel: Solicitud }) {
@@ -145,13 +160,13 @@ function DetailPanel({ sel }: { sel: Solicitud }) {
             backgroundClip: 'text',
           }}
         >
-          {String(sel.orden).padStart(2, '0')}
+          {String(getDisplayOrden(sel)).padStart(2, '0')}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2.5 mb-1.5">
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-              Solicitud Nº {sel.orden}
+              Solicitud Nº {getDisplayOrden(sel)}
             </span>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-[11px] font-bold">
               <span className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0" />
@@ -263,7 +278,7 @@ function DetailPanel({ sel }: { sel: Solicitud }) {
                     <div className="text-[8px] text-gray-500">C.P.M. "Marcos Redondo" · Ciudad Real</div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="font-display text-[20px] text-orange-500 leading-none">#{sel.orden}</div>
+                    <div className="font-display text-[20px] text-orange-500 leading-none">#{getDisplayOrden(sel)}</div>
                     <div className="text-[7px] text-gray-400 mt-0.5">Curso 26/27</div>
                   </div>
                 </div>
@@ -665,7 +680,7 @@ export default function AdminPanel() {
                       }`}
                       style={{ fontSize: 40 }}
                     >
-                      {String(s.orden).padStart(2, '0')}
+                      {String(getDisplayOrden(s)).padStart(2, '0')}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className={`text-[13px] font-bold tracking-tight mb-1 truncate ${
