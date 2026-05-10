@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import type { MatriculacionFormData } from './types';
 import { MATRICULACION_INITIAL } from './types';
 
