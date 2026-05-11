@@ -23,11 +23,10 @@ const C = {
   gray50: '#F9FAFB', gray100: '#F3F4F6', gray200: '#E5E7EB',
   gray400: '#9CA3AF', gray500: '#6B7280', gray700: '#374151',
   gray800: '#1F2937', gray900: '#111827',
-  blue50: '#EFF6FF', blue200: '#BFDBFE', blue800: '#1E40AF',
+  blue50: '#EFF6FF', blue200: '#BFDBFE', blue700: '#1D4ED8', blue800: '#1E40AF',
   orange50: '#FFF7ED', orange200: '#FED7AA', orange800: '#92400E',
   green50: '#F0FDF4', green100: '#DCFCE7', green200: '#BBF7D0', green700: '#15803D', green800: '#166534',
   purple50: '#FAF5FF', purple100: '#F3E8FF', purple200: '#E9D5FF', purple700: '#7E22CE',
-  blue700: '#1D4ED8',
 };
 
 const s = StyleSheet.create({
@@ -50,11 +49,14 @@ const Field = ({ label, value, highlight }: { label: string; value: string; high
   <View>
     <Text style={s.fieldLabel}>{label}</Text>
     <Text style={highlight ? s.fieldValueHighlight : s.fieldValue}>{value || '—'}</Text>
+
   </View>
 );
 
 const AmpliacionPdfComponent = ({ formData, academicYear, submitTimestamp, asignaturasMatriculadas, requestNumber }: AmpliacionPdfProps) => {
-  const fechaFmt = formData.fechaNacimiento ? new Date(formData.fechaNacimiento + 'T12:00:00').toLocaleDateString('es-ES') : '';
+  const fechaFmt = formData.fechaNacimiento
+    ? new Date(formData.fechaNacimiento + 'T12:00:00').toLocaleDateString('es-ES')
+    : '';
 
   const reduccionLabel =
     formData.tipoReduccion === 'fam_num_general' ? 'Familia Numerosa (General)'
@@ -64,6 +66,9 @@ const AmpliacionPdfComponent = ({ formData, academicYear, submitTimestamp, asign
     : formData.tipoReduccion === 'violencia_genero' ? 'Víctima Violencia de Género'
     : formData.tipoReduccion === 'ingreso_minimo' ? 'Ingreso Mínimo Vital'
     : 'Ninguna';
+
+  const yearMatch = academicYear.match(/(\d{4})\s*\/\s*(\d{4})/);
+  const cursoShort = yearMatch ? `${yearMatch[1].slice(-2)}/${yearMatch[2].slice(-2)}` : '';
 
   const STYLES: Record<NonNullable<AmpliacionSubject['tipo']>, { bg: string; border: string; code: string; codeBg: string; badge: string; badgeBg: string; badgeBorder: string; label: string }> = {
     matriculada: { bg: C.white,      border: C.blue200,   code: C.blue700,   codeBg: C.blue50,   badge: C.blue700,   badgeBg: C.blue50,   badgeBorder: C.blue200,   label: 'Matriculada' },
@@ -87,24 +92,18 @@ const AmpliacionPdfComponent = ({ formData, academicYear, submitTimestamp, asign
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Image src={logoCpm} style={{ height: 30 }} />
-              {requestNumber && (() => {
-                const parts = requestNumber.split('-');
-                const counter = parts[parts.length - 1] ?? requestNumber;
-                const yearMatch = academicYear.match(/(\d{4})\s*\/\s*(\d{4})/);
-                const cursoShort = yearMatch ? `${yearMatch[1].slice(-2)}/${yearMatch[2].slice(-2)}` : '';
-                return (
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontSize: 22, fontFamily: 'Helvetica-Bold', color: '#F97316', lineHeight: 1 }}>
-                      #{counter}
+              {requestNumber && (
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 22, fontFamily: 'Helvetica-Bold', color: '#F97316', lineHeight: 1 }}>
+                    #{requestNumber}
+                  </Text>
+                  {cursoShort && (
+                    <Text style={{ fontSize: 8, color: '#F97316', marginTop: 1 }}>
+                      Curso {cursoShort}
                     </Text>
-                    {cursoShort && (
-                      <Text style={{ fontSize: 8, color: '#F97316', marginTop: 1 }}>
-                        Curso {cursoShort}
-                      </Text>
-                    )}
-                  </View>
-                );
-              })()}
+                  )}
+                </View>
+              )}
             </View>
             <View style={{ backgroundColor: '#F97316', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 }}>
               <Text style={{ fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.white }}>

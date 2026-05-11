@@ -59,3 +59,4 @@ export function useAcademicYear() {
 export function getActiveAcademicYear(): string {
   return readStoredYear();
 }
+}
