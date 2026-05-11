@@ -1,9 +1,12 @@
 import { useState, type ComponentType } from 'react';
+import type { EnrollmentFormData } from './types';
+import { ACTIVE_ACADEMIC_YEAR, getAcademicYearShort } from './config/academicYear';
+import { useAcademicYear } from './hooks/useAcademicYear';
 import {
   Search, RefreshCw, Settings, Trash2, Plus, FileText,
   Download, Printer, CheckCircle2, AlertCircle, Clock,
   ChevronDown, ChevronLeft, ChevronRight, ZoomIn, ZoomOut,
-  Inbox, BarChart3, Calendar, TrendingUp,
+  Inbox, BarChart3, Calendar, TrendingUp, X, Link, Globe, SlidersHorizontal,
 } from 'lucide-react';
 
 type IconComponent = ComponentType<{ size?: number; className?: string; strokeWidth?: number }>;
@@ -140,6 +143,130 @@ function getDisplayOrden(s: Solicitud): string {
 
 function DetailPanel({ sel }: { sel: Solicitud }) {
   const [notes, setNotes] = useState('');
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const academicYear = ACTIVE_ACADEMIC_YEAR;
+
+  const handleDownloadPdf = async () => {
+    setIsGeneratingPdf(true);
+    try {
+      const { pdf } = await import('@react-pdf/renderer');
+      const ts = new Date();
+
+      const nameParts = sel.nombre.split(' ');
+      const nombre = nameParts[0] || '';
+      const apellidos = nameParts.slice(1).join(' ') || '';
+      const isProf = sel.curso.startsWith('EP');
+      const cursoNum = sel.curso.replace(/\D/g, '');
+
+      const formData: EnrollmentFormData = {
+        nombre,
+        apellidos,
+        dni: '00000000A',
+        fechaNacimiento: '2000-01-01',
+        domicilio: 'Calle Ejemplo 1',
+        localidad: 'Ciudad Real',
+        provincia: 'Ciudad Real',
+        codigoPostal: '13004',
+        email: 'alumno@ejemplo.com',
+        telefono: '000000000',
+        horaSalidaEstudios: '',
+        disponibilidadManana: false,
+        autorizacionImagen: true,
+        tutor1Nombre: '',
+        tutor1Dni: '',
+        tutor2Nombre: '',
+        tutor2Dni: '',
+        tipoEnsenanza: isProf ? 'profesional' : 'elemental',
+        curso: cursoNum,
+        especialidad: sel.especialidad,
+        asignaturaPendiente1: '',
+        asignaturaPendiente2: '',
+        perfilProfesional: '',
+        formaPago: 'unico',
+        familiaNumerosa: false,
+        tipoReduccion: 'ninguna',
+        matriculaHonor: false,
+        esPrimerAno: false,
+        importeTotal: '',
+        importe1erPago: '',
+        importe2oPago: '',
+        convalidacionSolicitada: false,
+        convalidacionAsignaturas: [],
+        convalidacionMotivo: '',
+      };
+
+      let blob: Blob;
+      if (sel.esAmpliacion) {
+        const { AmpliacionPdf } = await import('./AmpliacionPdf');
+        const asignaturas = ASIGS.matriculadas.map(a => ({
+          MATERIA: a.codigo,
+          DESCRIPCION: a.nombre,
+          tipo: 'matriculada' as const,
+        }));
+        blob = await pdf(
+          <AmpliacionPdf
+            formData={formData}
+            academicYear={academicYear}
+            submitTimestamp={ts}
+            asignaturasMatriculadas={asignaturas}
+            requestNumber={String(getDisplayOrden(sel))}
+          />
+        ).toBlob();
+      } else {
+        const { MatriculaPdf } = await import('./MatriculaPdf');
+        const asignaturasCursoActual = [
+          ...ASIGS.matriculadas.map(a => ({ MATERIA: a.codigo, DESCRIPCION: a.nombre })),
+          ...ASIGS.convalidacion.map(a => ({ MATERIA: a.codigo, DESCRIPCION: a.nombre })),
+        ];
+        const selectedPendingSubjects = ASIGS.pendiente.map(a => ({
+          id: a.codigo,
+          materiaId: a.codigo,
+          label: a.nombre,
+        }));
+        blob = await pdf(
+          <MatriculaPdf
+            formData={formData}
+            academicYear={academicYear}
+            submitTimestamp={ts}
+            asignaturasCursoActual={asignaturasCursoActual}
+            selectedPendingSubjects={selectedPendingSubjects}
+            calculation={null}
+            requestNumber={String(getDisplayOrden(sel))}
+          />
+        ).toBlob();
+      }
+
+      const url = URL.createObjectURL(blob);
+
+      // Previsualización en nueva pestaña
+      const previewWin = window.open(url, '_blank');
+      if (!previewWin) {
+        alert('El navegador bloqueó la ventana de previsualización. El archivo se descargará directamente.');
+      }
+
+      // Descarga directa con nombre correcto (evita 0 bytes al descargar desde el visor)
+      const ds = ts.toLocaleDateString('es-ES').replace(/\//g, '-');
+      const hs = ts.toLocaleTimeString('es-ES').replace(/:/g, '-');
+      const surname = sel.nombre.split(' ').slice(1).join('_') || 'ALUMNO';
+      const prefix = sel.esAmpliacion ? 'AMPLIACION' : 'SOLICITUD';
+      const filename = `${prefix}_${surname}_${ds}_${hs}.pdf`;
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Limpiar el Blob URL después de un tiempo prudente
+      setTimeout(() => URL.revokeObjectURL(url), 120000);
+    } catch (err) {
+      console.error('Error generando PDF:', err);
+      alert('No se pudo generar el PDF. Revisa la consola para más detalles.');
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
@@ -261,8 +388,17 @@ function DetailPanel({ sel }: { sel: Solicitud }) {
               <button className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                 <Printer size={11} /> Imprimir
               </button>
-              <button className="flex items-center gap-1 px-2 py-1 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors">
-                <Download size={11} /> Descargar
+              <button
+                onClick={handleDownloadPdf}
+                disabled={isGeneratingPdf}
+                className="flex items-center gap-1 px-2 py-1 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-colors disabled:opacity-50"
+              >
+                {isGeneratingPdf ? (
+                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Download size={11} />
+                )}
+                {isGeneratingPdf ? 'Generando...' : 'Descargar'}
               </button>
             </div>
 
@@ -274,12 +410,12 @@ function DetailPanel({ sel }: { sel: Solicitud }) {
                   <div className="w-7 h-7 bg-orange-50 rounded-sm flex-shrink-0 border border-orange-100" />
                   <div className="text-center flex-1">
                     <div className="font-display text-[13px]">Solicitud de Matrícula</div>
-                    <div className="text-[8px] text-gray-500 mt-0.5">Curso Académico 2026 / 2027</div>
+                    <div className="text-[8px] text-gray-500 mt-0.5">Curso Académico {academicYear}</div>
                     <div className="text-[8px] text-gray-500">C.P.M. "Marcos Redondo" · Ciudad Real</div>
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="font-display text-[20px] text-orange-500 leading-none">#{getDisplayOrden(sel)}</div>
-                    <div className="text-[7px] text-gray-400 mt-0.5">Curso 26/27</div>
+                    <div className="text-[7px] text-gray-400 mt-0.5">Curso {getAcademicYearShort()}</div>
                   </div>
                 </div>
 
@@ -474,11 +610,11 @@ function InformesPanel() {
       <div className="flex items-start justify-between mb-7">
         <div>
           <h2 className="font-display text-[26px] text-gray-900 tracking-tight font-normal">Informes</h2>
-          <p className="text-sm text-gray-400 mt-0.5">Curso académico 2026 / 2027</p>
+          <p className="text-sm text-gray-400 mt-0.5">Curso académico {ACTIVE_ACADEMIC_YEAR}</p>
         </div>
         <div className="flex gap-2">
           <button className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 bg-white hover:bg-gray-50 transition-colors">
-            <Calendar size={14} /> Curso 2026/27
+            <Calendar size={14} /> Curso {getAcademicYearShort()}
             <ChevronDown size={13} className="text-gray-400" />
           </button>
           <button className="flex items-center gap-2 px-4 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-semibold hover:bg-orange-600 transition-colors">
@@ -556,6 +692,9 @@ export default function AdminPanel() {
   const [tab, setTab] = useState<TabId>('tram');
   const [selectedId, setSelectedId] = useState(3);
   const [search, setSearch] = useState('');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'urls' | 'options'>('options');
+  const { year: academicYear, setYear: setAcademicYear } = useAcademicYear();
 
   const isMainTab = tab === 'tram' || tab === 'val' || tab === 'done';
   const selData = SOLICITUDES.find(s => s.id === selectedId)!;
@@ -606,9 +745,20 @@ export default function AdminPanel() {
           })}
         </nav>
 
-        <button className="w-10 h-10 border border-gray-200 bg-gray-50 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors flex items-center justify-center flex-shrink-0">
-          <Settings size={17} />
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Curso académico */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg">
+            <Calendar size={13} strokeWidth={2.5} />
+            <span className="text-[12px] font-bold whitespace-nowrap">{academicYear}</span>
+          </div>
+
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="w-10 h-10 border border-gray-200 bg-gray-50 rounded-xl text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors flex items-center justify-center flex-shrink-0"
+          >
+            <Settings size={17} />
+          </button>
+        </div>
       </header>
 
       {/* Body */}
@@ -715,6 +865,134 @@ export default function AdminPanel() {
           {tab === 'reports' && <InformesPanel />}
         </main>
       </div>
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="font-display text-[18px] text-gray-900 tracking-tight font-normal">Configuración</h2>
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal tabs */}
+            <div className="flex border-b border-gray-100">
+              <button
+                onClick={() => setSettingsTab('options')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-[13px] font-medium transition-colors ${
+                  settingsTab === 'options'
+                    ? 'text-orange-600 border-b-2 border-orange-500'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <SlidersHorizontal size={14} />
+                Opciones
+              </button>
+              <button
+                onClick={() => setSettingsTab('urls')}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-[13px] font-medium transition-colors ${
+                  settingsTab === 'urls'
+                    ? 'text-orange-600 border-b-2 border-orange-500'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Link size={14} />
+                URLs
+              </button>
+            </div>
+
+            {/* Modal content */}
+            <div className="p-6">
+              {settingsTab === 'options' && (
+                <div className="space-y-6">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-2">
+                      Curso académico activo
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        value={academicYear}
+                        onChange={(e) => setAcademicYear(e.target.value)}
+                        className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-900 outline-none focus:ring-2 focus:ring-orange-200 cursor-pointer"
+                      >
+                        {[
+                          '2025 / 2026',
+                          '2026 / 2027',
+                          '2027 / 2028',
+                          '2028 / 2029',
+                          '2029 / 2030',
+                          '2030 / 2031',
+                        ].map((y) => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-2">
+                      Al cambiar el curso académico, el sistema filtrará matrículas y reiniciará los contadores de orden para el nuevo periodo.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {settingsTab === 'urls' && (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <Globe size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">Envío de matrícula</div>
+                      <code className="text-[12px] text-gray-700 font-mono break-all">/api/submit-enrollment</code>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <Globe size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">Subida de PDF</div>
+                      <code className="text-[12px] text-gray-700 font-mono break-all">/api/upload-pdf</code>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <Globe size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">Comprobación duplicados + NOrden</div>
+                      <code className="text-[12px] text-gray-700 font-mono break-all">PA_WEBHOOK_DUPLICADOS_URL</code>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <Globe size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">Creación registro Dataverse</div>
+                      <code className="text-[12px] text-gray-700 font-mono break-all">PA_WEBHOOK_URL</code>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <Globe size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-0.5">Subida PDF + Email</div>
+                      <code className="text-[12px] text-gray-700 font-mono break-all">PA_WEBHOOK_PDF_URL</code>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+              <button
+                onClick={() => setIsSettingsOpen(false)}
+                className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-[13px] font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

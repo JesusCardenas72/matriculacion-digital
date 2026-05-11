@@ -21,6 +21,34 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data));
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+function extractErrorMessage(status: number, bodyText: string): string {
+  if (!bodyText) return `El servicio de Power Automate respondió con HTTP ${status}`;
+  try {
+    const parsed = JSON.parse(bodyText);
+    if (parsed?.error?.message) return parsed.error.message;
+    if (parsed?.message) return parsed.message;
+    if (parsed?.error_description) return parsed.error_description;
+  } catch {
+    // no es JSON
+  }
+  if (bodyText.trim().startsWith('<')) {
+    return `El servicio de Power Automate respondió con HTTP ${status} (respuesta HTML inesperada)`;
+  }
+  const trimmed = bodyText.trim().slice(0, 300);
+  return trimmed.length < bodyText.trim().length ? trimmed + '…' : trimmed;
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -42,12 +70,19 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   try {
     const rawBody = await readBody(req);
 
-    // Reenviar tal cual al webhook de Power Automate
-    const paRes = await fetch(PA_WEBHOOK_PDF_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: rawBody,
-    });
+    let paRes;
+    try {
+      paRes = await fetchWithTimeout(PA_WEBHOOK_PDF_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: rawBody,
+      });
+    } catch (netErr: unknown) {
+      const msg = netErr instanceof Error ? netErr.message : String(netErr);
+      console.error('Error de red al contactar PA_WEBHOOK_PDF_URL:', msg);
+      sendJson(res, 502, { ok: false, error: `No se pudo contactar con el servicio de subida de PDF: ${msg}` });
+      return;
+    }
 
     const paData = await paRes.text();
 
@@ -59,12 +94,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         sendJson(res, 200, { ok: true });
       }
     } else {
-      console.error(`Power Automate PDF error ${paRes.status}: ${paData}`);
-      sendJson(res, paRes.status, { ok: false, error: paData });
+      const msg = extractErrorMessage(paRes.status, paData);
+      console.error(`Power Automate PDF error ${paRes.status}: ${msg}`);
+      sendJson(res, paRes.status, { ok: false, error: msg });
     }
 
-  } catch (err) {
-    console.error('upload-pdf error:', err);
-    sendJson(res, 500, { ok: false, error: String(err) });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('upload-pdf error:', msg);
+    sendJson(res, 500, { ok: false, error: `Error interno del servidor: ${msg}` });
   }
 }

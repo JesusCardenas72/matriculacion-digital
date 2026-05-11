@@ -4,9 +4,12 @@ import { EnrollmentFormData } from '../types';
 interface MenoresEdadSectionProps {
   formData: EnrollmentFormData;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
+  fieldErrors?: Record<string, string>;
 }
 
-export const MenoresEdadSection: React.FC<MenoresEdadSectionProps> = ({ formData, onChange }) => {
+export const MenoresEdadSection: React.FC<MenoresEdadSectionProps> = ({ formData, onChange, onBlur, fieldErrors }) => {
+  const errs = fieldErrors || {};
   return (
     <section className="bg-white rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-sm border border-gray-100">
       <div className="flex items-center gap-3 mb-2">
@@ -22,7 +25,8 @@ export const MenoresEdadSection: React.FC<MenoresEdadSectionProps> = ({ formData
           </div>
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
-            <input name="tutor1Dni" value={formData.tutor1Dni} onChange={onChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+            <input name="tutor1Dni" value={formData.tutor1Dni} onChange={onChange} onBlur={onBlur} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${errs['tutor1Dni'] ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={10} placeholder="12345678X" />
+            {errs['tutor1Dni'] && <p className="text-red-500 text-xs mt-1 ml-1">{errs['tutor1Dni']}</p>}
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -32,7 +36,8 @@ export const MenoresEdadSection: React.FC<MenoresEdadSectionProps> = ({ formData
           </div>
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
-            <input name="tutor2Dni" value={formData.tutor2Dni} onChange={onChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+            <input name="tutor2Dni" value={formData.tutor2Dni} onChange={onChange} onBlur={onBlur} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${errs['tutor2Dni'] ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={10} placeholder="12345678X" />
+            {errs['tutor2Dni'] && <p className="text-red-500 text-xs mt-1 ml-1">{errs['tutor2Dni']}</p>}
           </div>
         </div>
       </div>

@@ -47,4 +47,7 @@ export interface EnrollmentFormData {
   convalidacionSolicitada?: boolean;
   convalidacionAsignaturas?: string[];
   convalidacionMotivo?: 'doble' | 'eso_bach' | '';
+
+  // Curso académico al que pertenece la matrícula
+  academicYear?: string;
 }

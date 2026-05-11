@@ -24,6 +24,37 @@ function sendJson(res: ServerResponse, status: number, data: unknown) {
   res.end(JSON.stringify(data));
 }
 
+// fetch con timeout para evitar colgados indefinidos
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    return response;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+function extractErrorMessage(status: number, bodyText: string): string {
+  if (!bodyText) return `El servicio de Power Automate respondió con HTTP ${status}`;
+  // Intentar extraer mensaje de error de Power Automate
+  try {
+    const parsed = JSON.parse(bodyText);
+    if (parsed?.error?.message) return parsed.error.message;
+    if (parsed?.message) return parsed.message;
+    if (parsed?.error_description) return parsed.error_description;
+  } catch {
+    // no es JSON
+  }
+  // Si parece HTML, devolver solo el status
+  if (bodyText.trim().startsWith('<')) {
+    return `El servicio de Power Automate respondió con HTTP ${status} (respuesta HTML inesperada)`;
+  }
+  const trimmed = bodyText.trim().slice(0, 300);
+  return trimmed.length < bodyText.trim().length ? trimmed + '…' : trimmed;
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
@@ -47,18 +78,27 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const body = JSON.parse(rawBody) as Record<string, unknown>;
 
     // ── Paso 1: comprobar duplicados y obtener nOrden ─────────────────────────
-    const dupRes = await fetch(PA_WEBHOOK_DUPLICADOS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        nombre:        body.nombre,
-        apellidos:     body.apellidos,
-        dni:           body.dni,
-        especialidad:  body.especialidad,
-        tipoEnsenanza: body.tipoEnsenanza,
-        curso:         body.curso,
-      }),
-    });
+    let dupRes;
+    try {
+      dupRes = await fetchWithTimeout(PA_WEBHOOK_DUPLICADOS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre:        body.nombre,
+          apellidos:     body.apellidos,
+          dni:           body.dni,
+          especialidad:  body.especialidad,
+          tipoEnsenanza: body.tipoEnsenanza,
+          curso:         body.curso,
+          academicYear:  body.academicYear,
+        }),
+      });
+    } catch (netErr: unknown) {
+      const msg = netErr instanceof Error ? netErr.message : String(netErr);
+      console.error('Error de red al contactar PA_WEBHOOK_DUPLICADOS_URL:', msg);
+      sendJson(res, 502, { ok: false, error: `No se pudo contactar con el servicio de duplicados: ${msg}` });
+      return;
+    }
 
     if (dupRes.status === 409) {
       const dupData = await dupRes.text();
@@ -72,8 +112,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 
     if (!dupRes.ok) {
       const errText = await dupRes.text();
-      console.error(`Duplicados+NOrden error ${dupRes.status}: ${errText}`);
-      sendJson(res, dupRes.status, { ok: false, error: errText });
+      const msg = extractErrorMessage(dupRes.status, errText);
+      console.error(`Duplicados+NOrden error ${dupRes.status}: ${msg}`);
+      sendJson(res, dupRes.status, { ok: false, error: msg });
       return;
     }
 
@@ -84,11 +125,19 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const nOrden = parseInt(parts[parts.length - 1] ?? '1', 10) || 1;
 
     // ── Paso 2: crear el registro con el nOrden calculado ─────────────────────
-    const paRes = await fetch(PA_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, nOrden: String(nOrden) }),
-    });
+    let paRes;
+    try {
+      paRes = await fetchWithTimeout(PA_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, nOrden: String(nOrden) }),
+      });
+    } catch (netErr: unknown) {
+      const msg = netErr instanceof Error ? netErr.message : String(netErr);
+      console.error('Error de red al contactar PA_WEBHOOK_URL:', msg);
+      sendJson(res, 502, { ok: false, error: `No se pudo contactar con el servicio de creación de registro: ${msg}` });
+      return;
+    }
 
     const paData = await paRes.text();
 
@@ -100,12 +149,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
         sendJson(res, 200, { ok: true, nOrden });
       }
     } else {
-      console.error(`Power Automate error ${paRes.status}: ${paData}`);
-      sendJson(res, paRes.status, { ok: false, error: paData });
+      const msg = extractErrorMessage(paRes.status, paData);
+      console.error(`Power Automate error ${paRes.status}: ${msg}`);
+      sendJson(res, paRes.status, { ok: false, error: msg });
     }
 
-  } catch (err) {
-    console.error('submit-enrollment error:', err);
-    sendJson(res, 500, { ok: false, error: String(err) });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('submit-enrollment error:', msg);
+    sendJson(res, 500, { ok: false, error: `Error interno del servidor: ${msg}` });
   }
 }

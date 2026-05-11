@@ -15,6 +15,8 @@ import { TutorialPdf } from './TutorialPdf';
 import logoCpm from './assets/logo_cpm.png';
 import logoJccm from './assets/logo_jccm.png';
 import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, validateDNI, validateEmail, validateCP, validateTelefono, sanitize } from './constants';
+import { getCurrentCalendarYear } from './config/academicYear';
+import { useAcademicYear } from './hooks/useAcademicYear';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -74,6 +76,7 @@ export default function App() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [materiasIndex, setMateriasIndex] = useState<MateriasIndex | null>(null);
   const [materiasLoading, setMateriasLoading] = useState(true);
+  const { year: academicYear } = useAcademicYear();
 
   useEffect(() => {
     loadMaterias()
@@ -88,6 +91,8 @@ export default function App() {
 
     switch (name) {
       case 'dni':
+      case 'tutor1Dni':
+      case 'tutor2Dni':
         error = validateDNI(trimmed);
         break;
       case 'email':
@@ -216,6 +221,7 @@ export default function App() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error' | 'duplicate'>('idle');
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
 
@@ -295,7 +301,11 @@ export default function App() {
     let val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
     
     if (typeof val === 'string') {
-      val = sanitize(val);
+      if (name === 'tutor1Nombre' || name === 'tutor2Nombre') {
+        val = val.replace(/\s{2,}/g, ' ');
+      } else {
+        val = sanitize(val);
+      }
     }
 
     if (name === 'formaPago' && (val === 'unico' || val === 'fraccionado')) {
@@ -304,7 +314,7 @@ export default function App() {
       }
     }
 
-    if (typeof val === 'string' && ['dni', 'email', 'codigoPostal', 'telefono'].includes(name)) {
+    if (typeof val === 'string' && ['dni', 'tutor1Dni', 'tutor2Dni', 'email', 'codigoPostal', 'telefono'].includes(name)) {
       validateField(name, val);
     }
 
@@ -351,6 +361,7 @@ export default function App() {
   };
 
   const handleDniBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    const name = e.target.name;
     const raw = e.target.value.trim().toUpperCase();
     if (!raw) return;
     const LETTERS = 'TRWAGMYFPDXBNJZSQVHLCKE';
@@ -367,8 +378,8 @@ export default function App() {
     }
 
     if (formatted !== e.target.value) {
-      setFormData(prev => ({ ...prev, dni: formatted }));
-      validateField('dni', formatted);
+      setFormData(prev => ({ ...prev, [name]: formatted }));
+      validateField(name, formatted);
     }
   }, [validateField]);
 
@@ -459,8 +470,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const currentYear = new Date().getFullYear();
-  const academicYear = `${currentYear} / ${currentYear + 1}`;
+  const currentYear = getCurrentCalendarYear();
 
   // ── helper: convert image File to PNG Uint8Array (for pdf-lib attachments) ──
   const _imageToPngBytes = (file: File): Promise<Uint8Array> =>
@@ -629,6 +639,7 @@ export default function App() {
           importe1erPago: formData.importe1erPago ?? '',
           importe2oPago: formData.importe2oPago ?? '',
           estado: 'Recibida',
+          academicYear,
           asignaturas: asignaturasParaDataverse
         };
 
@@ -675,6 +686,7 @@ export default function App() {
             rowId,
             nOrden,
             requestNumber: reqNum,
+            academicYear,
             fileName: filename,
             mimeType: 'application/pdf',
             contentBase64: uint8ToBase64(pdfBytes),
@@ -726,6 +738,7 @@ export default function App() {
       if (!alreadySubmitted) setAttachments([]);
     } catch (error) {
       console.error(error);
+      setSubmitError(error instanceof Error ? error.message : 'Error desconocido');
       setSubmitStatus('error');
     } finally {
       setIsSubmitting(false);
@@ -998,7 +1011,8 @@ export default function App() {
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
-                  <input name="tutor1Dni" value={formData.tutor1Dni} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={10} />
+                  <input name="tutor1Dni" value={formData.tutor1Dni} onChange={handleChange} onBlur={handleDniBlur} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.tutor1Dni ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={10} placeholder="12345678X" />
+                  {fieldErrors.tutor1Dni && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.tutor1Dni}</p>}
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1008,7 +1022,8 @@ export default function App() {
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
-                  <input name="tutor2Dni" value={formData.tutor2Dni} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={10} />
+                  <input name="tutor2Dni" value={formData.tutor2Dni} onChange={handleChange} onBlur={handleDniBlur} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.tutor2Dni ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={10} placeholder="12345678X" />
+                  {fieldErrors.tutor2Dni && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.tutor2Dni}</p>}
                 </div>
               </div>
             </div>
@@ -2003,36 +2018,91 @@ export default function App() {
         </form>
         </div>
 
-        {submitStatus === 'error' && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-6 p-4 bg-red-50 text-red-600 rounded-2xl flex items-center gap-3 border border-red-100"
-          >
-            <AlertCircle size={20} />
-            <p className="text-sm font-medium">Hubo un error al enviar el formulario. Por favor, inténtalo de nuevo.</p>
-          </motion.div>
-        )}
+        <AnimatePresence>
+          {submitStatus === 'error' && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => { setSubmitStatus('idle'); setSubmitError(null); }}
+                className="fixed inset-0 bg-black/40 backdrop-blur-md z-[140]"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl z-[150] border border-red-100"
+              >
+                <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
+                  <div className="p-2 bg-red-100 text-red-600 rounded-lg">
+                    <AlertCircle size={24} />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900">Error al enviar</h3>
+                </div>
+                <div className="bg-red-50 rounded-2xl p-6 mb-6">
+                  <p className="text-sm text-red-800 font-medium">
+                    {submitError || 'Hubo un error al enviar el formulario. Por favor, inténtalo de nuevo.'}
+                  </p>
+                  <p className="text-xs text-red-600 mt-3">
+                    Si el problema persiste, comprueba tu conexión a Internet o contacta con Secretaría.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setSubmitStatus('idle'); setSubmitError(null); }}
+                  className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
+                >
+                  Entendido
+                </button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
 
-        {submitStatus === 'duplicate' && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-6 p-4 bg-amber-50 text-amber-800 rounded-2xl flex items-start gap-3 border border-amber-200"
-          >
-            <AlertCircle size={20} className="mt-0.5 flex-shrink-0" />
-            <div className="text-sm">
-              <p className="font-semibold mb-1">Ya existe una solicitud de matrícula para este DNI, especialidad y curso.</p>
-              <p>
-                Si necesitas modificarla, contacta con la Secretaría del Conservatorio:<br />
-                📞 <b>926 274 154</b> &nbsp;|&nbsp; ✉️ <a href="mailto:13004341.cpm@educastillalamancha.es" className="underline">13004341.cpm@educastillalamancha.es</a>
-              </p>
-            </div>
-          </motion.div>
-        )}
+        <AnimatePresence>
+          {submitStatus === 'duplicate' && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setSubmitStatus('idle')}
+                className="fixed inset-0 bg-black/40 backdrop-blur-md z-[140]"
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl z-[150] border border-amber-200"
+              >
+                <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
+                  <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
+                    <AlertCircle size={24} />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900">Solicitud duplicada</h3>
+                </div>
+                <div className="bg-amber-50 rounded-2xl p-6 mb-6 text-sm text-amber-800">
+                  <p className="font-semibold mb-2">Ya existe una solicitud de matrícula para este DNI, especialidad y curso.</p>
+                  <p>
+                    Si necesitas modificarla, contacta con la Secretaría del Conservatorio:<br />
+                    📞 <b>926 274 154</b> &nbsp;|&nbsp; ✉️ <a href="mailto:13004341.cpm@educastillalamancha.es" className="underline">13004341.cpm@educastillalamancha.es</a>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSubmitStatus('idle')}
+                  className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
+                >
+                  Entendido
+                </button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
 
         <footer className="mt-12 text-center text-gray-400 text-xs pb-12">
-          <p>© 2026 Conservatorio Profesional de Música "Marcos Redondo" - Ciudad Real</p>
+          <p>© {currentYear} Conservatorio Profesional de Música "Marcos Redondo" - Ciudad Real</p>
           <p className="mt-1">Sistema de Matriculación Digital</p>
           <button
             type="button"

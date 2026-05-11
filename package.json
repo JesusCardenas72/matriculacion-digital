@@ -9,7 +9,8 @@
     "plan-estudios"
   ],
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev": "concurrently --names API,VITE --prefix-colors cyan,green \"tsx scripts/dev-api.ts\" \"vite --port=3000 --host=0.0.0.0\" ",
+    "vercel-dev": "npx vercel dev",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
@@ -37,6 +38,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

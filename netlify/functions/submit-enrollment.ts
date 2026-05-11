@@ -61,20 +61,22 @@ function odataEscape(value: string): string {
 }
 
 /**
- * Comprueba si ya existe una matrícula con el mismo (DNI + especialidad + ensenanzaCurso).
+ * Comprueba si ya existe una matrícula con el mismo (DNI + especialidad + ensenanzaCurso + cursoAcademico).
  */
 async function existsDuplicate(
   token: string,
   entitySet: string,
   dni: string,
   especialidad: string,
-  ensenanzaCurso: string
+  ensenanzaCurso: string,
+  academicYear: string
 ): Promise<boolean> {
   const dataverseUrl = process.env.DATAVERSE_URL!;
   const filter = [
     `cpmmr_dni eq '${odataEscape(dni)}'`,
     `cpmmr_especialidad eq '${odataEscape(especialidad)}'`,
     `cpmmr_ensenanzaycurso eq '${odataEscape(ensenanzaCurso)}'`,
+    `cpmmr_cursoacademico eq '${odataEscape(academicYear)}'`,
   ].join(' and ');
 
   const url = `${dataverseUrl}/api/data/v9.2/${entitySet}?$select=cpmmr_matriculaid&$filter=${encodeURIComponent(filter)}&$top=1`;
@@ -85,19 +87,21 @@ async function existsDuplicate(
 }
 
 /**
- * Calcula el siguiente NOrden para (especialidad + ensenanzaCurso).
- * Empieza en 1 si no hay ninguno previo.
+ * Calcula el siguiente NOrden para (especialidad + ensenanzaCurso + cursoAcademico).
+ * Empieza en 1 si no hay ninguno previo en ese curso académico.
  */
 async function getNextNOrden(
   token: string,
   entitySet: string,
   especialidad: string,
-  ensenanzaCurso: string
+  ensenanzaCurso: string,
+  academicYear: string
 ): Promise<number> {
   const dataverseUrl = process.env.DATAVERSE_URL!;
   const filter = [
     `cpmmr_especialidad eq '${odataEscape(especialidad)}'`,
     `cpmmr_ensenanzaycurso eq '${odataEscape(ensenanzaCurso)}'`,
+    `cpmmr_cursoacademico eq '${odataEscape(academicYear)}'`,
   ].join(' and ');
 
   const url = `${dataverseUrl}/api/data/v9.2/${entitySet}?$select=cr955_norden&$filter=${encodeURIComponent(filter)}&$orderby=cr955_norden desc&$top=1`;
@@ -163,14 +167,15 @@ export const handler: Handler = async (event) => {
     const dni            = str('dni');
     const nombre         = str('nombre');
     const apellidos      = str('apellidos');
+    const academicYear   = str('academicYear') || `${new Date().getFullYear()} / ${new Date().getFullYear() + 1}`;
 
     // Obtener token Dataverse
     const token      = await getAzureToken(`${process.env.DATAVERSE_URL}/.default`);
     const entitySet  = process.env.DATAVERSE_TABLE_NAME!;
 
-    // 1) Validar duplicados (DNI + especialidad + ensenanzaCurso)
+    // 1) Validar duplicados (DNI + especialidad + ensenanzaCurso + cursoAcademico)
     if (dni && especialidad && ensenanzaCurso) {
-      const isDup = await existsDuplicate(token, entitySet, dni, especialidad, ensenanzaCurso);
+      const isDup = await existsDuplicate(token, entitySet, dni, especialidad, ensenanzaCurso, academicYear);
       if (isDup) {
         return {
           statusCode: 409,
@@ -187,8 +192,8 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    // 2) Calcular NOrden correlativo dentro de (especialidad + ensenanzaCurso)
-    const nOrden = await getNextNOrden(token, entitySet, especialidad, ensenanzaCurso);
+    // 2) Calcular NOrden correlativo dentro de (especialidad + ensenanzaCurso + cursoAcademico)
+    const nOrden = await getNextNOrden(token, entitySet, especialidad, ensenanzaCurso, academicYear);
 
     // 3) Crear registro principal en Solicitudes de Matrícula
     const rowId = await createDataverseRecord(token, entitySet, {
@@ -210,6 +215,7 @@ export const handler: Handler = async (event) => {
       cpmmr_especialidad:         especialidad,
       cpmmr_reducciontasas:       REDUCCION_TASAS_MAP[str('tipoReduccion')] ?? str('tipoReduccion'),
       cpmmr_formadepago:          FORMA_PAGO_MAP[str('formaPago')] ?? str('formaPago'),
+      cpmmr_cursoacademico:       academicYear,
       cr955_norden:               nOrden,
       cr955_convalidacionsolicitada: bool('convalidacionSolicitada'),
       cr955_convalidacionasignaturas: str('convalidacionAsignaturas'),

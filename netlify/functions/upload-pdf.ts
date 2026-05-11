@@ -145,6 +145,7 @@ interface EmailData {
   importeTotal: string;
   importe1erPago: string;
   importe2oPago: string;
+  academicYear: string;
   fileName: string;
   contentBase64: string;
 }
@@ -189,11 +190,12 @@ async function sendEmailWithPdf(token: string, data: EmailData): Promise<void> {
   <div style="padding:16px 24px 0">
     <p style="font-size:11px;font-weight:bold;color:#6b7280;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:10px">Datos de Matriculación</p>
     <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <tr><td style="padding:6px 8px;color:#6b7280;width:40%">Tipo / Curso</td><td style="padding:6px 8px">${data.tipoCurso}</td></tr>
-      <tr style="background:#f9fafb"><td style="padding:6px 8px;color:#6b7280">Especialidad</td><td style="padding:6px 8px;font-weight:bold">${data.especialidad}</td></tr>
-      ${data.asignaturaPendiente1 ? `<tr><td style="padding:6px 8px;color:#6b7280">Asignatura pendiente 1</td><td style="padding:6px 8px">${data.asignaturaPendiente1}</td></tr>` : ''}
-      ${data.asignaturaPendiente2 ? `<tr style="background:#f9fafb"><td style="padding:6px 8px;color:#6b7280">Asignatura pendiente 2</td><td style="padding:6px 8px">${data.asignaturaPendiente2}</td></tr>` : ''}
-      ${data.perfil ? `<tr><td style="padding:6px 8px;color:#6b7280">Perfil profesional</td><td style="padding:6px 8px">${data.perfil}</td></tr>` : ''}
+      <tr><td style="padding:6px 8px;color:#6b7280;width:40%">Curso académico</td><td style="padding:6px 8px;font-weight:bold">${data.academicYear}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:6px 8px;color:#6b7280;width:40%">Tipo / Curso</td><td style="padding:6px 8px">${data.tipoCurso}</td></tr>
+      <tr><td style="padding:6px 8px;color:#6b7280">Especialidad</td><td style="padding:6px 8px;font-weight:bold">${data.especialidad}</td></tr>
+      ${data.asignaturaPendiente1 ? `<tr style="background:#f9fafb"><td style="padding:6px 8px;color:#6b7280">Asignatura pendiente 1</td><td style="padding:6px 8px">${data.asignaturaPendiente1}</td></tr>` : ''}
+      ${data.asignaturaPendiente2 ? `<tr><td style="padding:6px 8px;color:#6b7280">Asignatura pendiente 2</td><td style="padding:6px 8px">${data.asignaturaPendiente2}</td></tr>` : ''}
+      ${data.perfil ? `<tr style="background:#f9fafb"><td style="padding:6px 8px;color:#6b7280">Perfil profesional</td><td style="padding:6px 8px">${data.perfil}</td></tr>` : ''}
     </table>
   </div>
 
@@ -317,6 +319,7 @@ export const handler: Handler = async (event) => {
         importeTotal:       body.importeTotal        ?? '',
         importe1erPago:     body.importe1erPago      ?? '',
         importe2oPago:      body.importe2oPago       ?? '',
+        academicYear:       body.academicYear        ?? `${new Date().getFullYear()} / ${new Date().getFullYear() + 1}`,
         fileName,
         contentBase64,
       }),
