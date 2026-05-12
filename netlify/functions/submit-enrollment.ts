@@ -24,6 +24,19 @@ const FORMA_PAGO_MAP: Record<string, string> = {
   beca:        'Solicita Beca',
 };
 
+/**
+ * Calcula automáticamente el curso académico activo según la fecha actual.
+ * El cambio de curso se produce el 1 de mayo de cada año.
+ */
+function getAutoAcademicYear(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0=Enero, 4=Mayo
+  if (month < 4) {
+    return `${year - 1} / ${year}`;
+  }
+  return `${year} / ${year + 1}`;
+}
+
 // ── Azure AD token ────────────────────────────────────────────────────────────
 
 async function getAzureToken(scope: string): Promise<string> {
@@ -167,7 +180,7 @@ export const handler: Handler = async (event) => {
     const dni            = str('dni');
     const nombre         = str('nombre');
     const apellidos      = str('apellidos');
-    const academicYear   = str('academicYear') || `${new Date().getFullYear()} / ${new Date().getFullYear() + 1}`;
+    const academicYear   = str('academicYear') || getAutoAcademicYear();
 
     // Obtener token Dataverse
     const token      = await getAzureToken(`${process.env.DATAVERSE_URL}/.default`);

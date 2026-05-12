@@ -1,0 +1,23 @@
+{
+  "name": "generacion-matricula-pdf",
+  "version": "1.0.0",
+  "description": "Módulo de generación de PDFs para la solicitud de matrícula del C.P.M. Marcos Redondo",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-pdf/renderer": "^4.3.2",
+    "pdf-lib": "^1.17.1",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "~5.8.2"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}
