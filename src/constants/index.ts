@@ -142,3 +142,16 @@ export function validateTelefono(telefono: string): string | null {
 export function sanitize(value: string): string {
   return value.replace(/\s{2,}/g, ' ').trim();
 }
+
+// Calcula el curso escolar al que pertenece la solicitud enviada hoy.
+// Corte en junio: a partir del 1-jun ya se matricula para el curso siguiente.
+// - mes >= 6 (jun-dic) → "YY/YY+1"
+// - mes < 6  (ene-may) → "YY-1/YY"
+export function calcularCursoEscolar(): string {
+  const hoy = new Date();
+  const year = hoy.getFullYear();
+  const month = hoy.getMonth() + 1;
+  const startYear = month >= 6 ? year : year - 1;
+  const pad = (n: number) => ((n % 100 + 100) % 100).toString().padStart(2, "0");
+  return `${pad(startYear)}/${pad(startYear + 1)}`;
+}

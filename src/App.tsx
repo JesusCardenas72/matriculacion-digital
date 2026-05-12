@@ -14,7 +14,7 @@ import { MatriculaPdf } from './MatriculaPdf';
 import { TutorialPdf } from './TutorialPdf';
 import logoCpm from './assets/logo_cpm.png';
 import logoJccm from './assets/logo_jccm.png';
-import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, validateDNI, validateEmail, validateCP, validateTelefono, sanitize } from './constants';
+import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, validateDNI, validateEmail, validateCP, validateTelefono, sanitize, calcularCursoEscolar } from './constants';
 import { getCurrentCalendarYear } from './config/academicYear';
 import { useAcademicYear } from './hooks/useAcademicYear';
 
@@ -640,6 +640,7 @@ export default function App() {
           importe2oPago: formData.importe2oPago ?? '',
           estado: 'Recibida',
           academicYear,
+          cursoEscolar: calcularCursoEscolar(),
           asignaturas: asignaturasParaDataverse
         };
 
