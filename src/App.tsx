@@ -225,12 +225,10 @@ export default function App() {
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
 
-  // ── Endpoints de envío (Vercel API Routes → Dataverse) ──────────────────────
-  const POWER_AUTOMATE_URL     = '/api/submit-enrollment';
-  const POWER_AUTOMATE_URL_PDF = '/api/upload-pdf';
-
-  const powerAutomateUrl    = POWER_AUTOMATE_URL;
-  const powerAutomateUrlPdf = POWER_AUTOMATE_URL_PDF;
+  // ── Endpoints directos a Power Automate (sin backend intermedio) ────────────
+  const PA_DUPLICADOS_URL = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b62c3d4b21d24bda8daa75a8586198eb/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=4nqPljifCY1CBxAiKj03La2YEksNn78meKn9-nlXGCk';
+  const PA_CREAR_URL      = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ec7a2a1c67974d32ba23de811d20e93d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3G39Rx3ZC55SKVIoBGvRufw-d6J6fYl74GOi46We9f0';
+  const PA_PDF_URL        = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b31521c981d04d95a8a6917a899f3988/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=i6YvgMW9GNJO-1Ynz0A3hAiNPGvZVpXkzbsdoeBYsfU';
   const [requestNumber, setRequestNumber] = useState<string | null>(null);
 
   const cursos = useMemo(() => {
@@ -573,21 +571,47 @@ export default function App() {
       const now = alreadySubmitted ? submitTimestamp : new Date();
       if (!alreadySubmitted) setSubmitTimestamp(now);
 
-      // ── Llamada 1: crear registro → Dataverse guarda cr955_norden ──────────────
       let reqNum: string | null = requestNumber;
       let pdfBytes: Uint8Array;
       let filename: string;
 
       if (!alreadySubmitted) {
-      if (!powerAutomateUrl) {
-        console.warn('Power Automate URL not configured. Simulating success.');
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
-      } else {
         const ensenanzaCursoPrefix = formData.tipoEnsenanza === 'elemental' ? 'EE' : formData.tipoEnsenanza === 'profesional' ? 'EP' : '';
         const ensenanzaCursoNum = formData.curso.replace(/\D/g, '');
         const ensenanzaCurso = ensenanzaCursoPrefix && ensenanzaCursoNum ? `${ensenanzaCursoPrefix}${ensenanzaCursoNum}` : '';
 
+        // ── Paso 1: Comprobar duplicados y obtener nOrden ───────────────────
+        const resDup = await fetch(PA_DUPLICADOS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nombre: formData.nombre,
+            apellidos: formData.apellidos,
+            dni: formData.dni,
+            especialidad: formData.especialidad,
+            tipoEnsenanza: formData.tipoEnsenanza,
+            curso: formData.curso,
+            academicYear,
+          }),
+        });
+        if (resDup.status === 409) {
+          setSubmitStatus('duplicate');
+          setIsSubmitting(false);
+          return;
+        }
+        if (!resDup.ok) throw new Error(`Error al comprobar duplicados (HTTP ${resDup.status})`);
+
+        const dupData = await resDup.json() as { ok?: boolean; reason?: string; requestNumber?: string };
+        if (dupData?.ok === false && dupData?.reason === 'duplicate') {
+          setSubmitStatus('duplicate');
+          setIsSubmitting(false);
+          return;
+        }
+        const requestNumberFromPA = dupData.requestNumber ?? '';
+        const parts = requestNumberFromPA.split('-');
+        const nOrden = parseInt(parts[parts.length - 1] ?? '1', 10) || 1;
+
+        // ── Paso 2: Crear registro en Dataverse ─────────────────────────────
         const asignaturasParaDataverse = [
           ...asignaturasCursoActual.map(a => ({
             codigo: a.MATERIA,
@@ -641,46 +665,34 @@ export default function App() {
           estado: 'Recibida',
           academicYear,
           cursoEscolar: calcularCursoEscolar(),
+          nOrden: String(nOrden),
           asignaturas: asignaturasParaDataverse
         };
 
-        const res1 = await fetch(powerAutomateUrl, {
+        const resCrear = await fetch(PA_CREAR_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(jsonPayload),
         });
-        if (res1.status === 409) {
-          setSubmitStatus('duplicate');
-          setIsSubmitting(false);
-          return;
-        }
-        if (!res1.ok) throw new Error(`Error al crear el registro (HTTP ${res1.status})`);
+        if (!resCrear.ok) throw new Error(`Error al crear el registro (HTTP ${resCrear.status})`);
 
-        const data1 = await res1.json();
-        if (data1?.ok === false && data1?.reason === 'duplicate') {
-          setSubmitStatus('duplicate');
-          setIsSubmitting(false);
-          return;
-        }
-        const rowId: string = data1?.rowId;
-        const nOrden: number = typeof data1?.nOrden === 'number' ? data1.nOrden : parseInt(String(data1?.nOrden ?? '0'), 10);
+        const dataCrear = await resCrear.json() as { ok?: boolean; rowId?: string };
+        const rowId: string = dataCrear?.rowId ?? '';
         if (!rowId) throw new Error('No se recibió rowId del servidor');
 
-        // El número de orden viene del backend (cr955_norden en Dataverse) → usarlo en el PDF
         reqNum = String(nOrden);
         setRequestNumber(reqNum);
 
         ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
 
-        // ── Llamada 2: subir el PDF en Base64 ────────────────────────────
+        // ── Paso 3: Subir PDF + email + asignaturas ─────────────────────────
         const perfilEmailLabel =
           formData.perfilProfesional === 'A' ? 'Perfil A — Fundamentos de Composición'
           : formData.perfilProfesional === 'B' ? (formData.curso.includes('5') ? 'Perfil B — Improvisación / Informática Musical' : 'Perfil B — Didáctica Musical / Improvisación')
           : formData.perfilProfesional === 'C' ? (formData.curso.includes('5') ? 'Perfil C — Improvisación / Instrumento Complementario' : 'Perfil C — Improvisación / Música Moderna')
           : '';
 
-        const pdfUrl = powerAutomateUrlPdf || powerAutomateUrl;
-        const res2 = await fetch(pdfUrl, {
+        const resPdf = await fetch(PA_PDF_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -691,7 +703,6 @@ export default function App() {
             fileName: filename,
             mimeType: 'application/pdf',
             contentBase64: uint8ToBase64(pdfBytes),
-            // Datos para el email de confirmación
             nombre:               formData.nombre,
             apellidos:            formData.apellidos,
             email:                formData.email,
@@ -713,7 +724,6 @@ export default function App() {
             importeTotal:         formData.importeTotal ? `${formData.importeTotal} EUR` : '',
             importe1erPago:       formData.importe1erPago ? `${formData.importe1erPago} EUR` : '',
             importe2oPago:        formData.importe2oPago ? `${formData.importe2oPago} EUR` : '',
-            // Asignaturas para Dataverse cr955_matriculaasignatura
             asignaturasCursoActual: JSON.stringify(asignaturasCursoActual),
             asignaturasPendientes:  JSON.stringify(
               selectedPendingSubjects
@@ -722,8 +732,7 @@ export default function App() {
             ),
           }),
         });
-        if (!res2.ok) throw new Error(`Error al subir el PDF (HTTP ${res2.status})`);
-      }
+        if (!resPdf.ok) throw new Error(`Error al subir el PDF (HTTP ${resPdf.status})`);
       } else {
         // Re-descarga: reconstruir el PDF con el número de orden ya guardado en estado
         ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));

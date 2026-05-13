@@ -1,3 +1,5 @@
+import materiasData from './materiasData';
+
 export interface Materia {
   MATERIA: string;
   DESCRIPCION: string;
@@ -9,26 +11,10 @@ export interface Materia {
   ESPECIALIDAD: string;
 }
 
-let materiasCache: Materia[] | null = null;
-let loadingPromise: Promise<Materia[]> | null = null;
+let materiasCache: Materia[] | null = materiasData as Materia[];
 
 export async function loadMaterias(): Promise<Materia[]> {
-  if (materiasCache) return materiasCache;
-  if (loadingPromise) return loadingPromise;
-  loadingPromise = fetch('/materias.json')
-    .then(res => {
-      if (!res.ok) throw new Error('Failed to load materias');
-      return res.json();
-    })
-    .then(data => {
-      materiasCache = data as Materia[];
-      return materiasCache;
-    })
-    .catch(err => {
-      loadingPromise = null;
-      throw err;
-    });
-  return loadingPromise;
+  return materiasCache!;
 }
 
 export function getMaterias(): Materia[] | null {

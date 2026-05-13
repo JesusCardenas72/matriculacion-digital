@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { viteSingleFile } from 'vite-plugin-singlefile';
 import path from 'path';
 import fs from 'fs';
 import { defineConfig, Plugin } from 'vite';
@@ -44,20 +45,20 @@ function vercelApiRoutes(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), tailwindcss(), vercelApiRoutes()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(),
+    tailwindcss(),
+    ...(mode === 'development' ? [vercelApiRoutes()] : []),
+    viteSingleFile(),
+  ],
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'motion', 'lucide-react'],
-        },
-      },
-    },
+    assetsInlineLimit: 200000,
+    copyPublicDir: false,
   },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
     },
   },
-});
+}));
