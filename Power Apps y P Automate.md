@@ -228,8 +228,7 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
       "Content-Type": "application/json"
     },
     "body": {
-      "ok": true,
-      "requestNumber": "@{concat(utcNow('yyyy'), '-', string(add(int(utcNow('yyyy')), 1)), '-', string(add(length(body('Enumerar_filas_2')?['value']), 1)))}"
+      "ok": true
     }
   },
   "runAfter": {
@@ -817,9 +816,195 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
   }
 }
 
+3. Enumerar filas
+
+{
+  "type": "OpenApiConnection",
+  "inputs": {
+    "parameters": {
+      "entityName": "cpmmr_matriculas",
+      "$select": "cr955_norden",
+      "$filter": "cpmmr_especialidad eq '@{triggerBody()?['especialidad']}' and cpmmr_ensenanzaycurso eq '@{variables('EnsenanzaCurso')}' and cpmmr_cursoacademico eq '@{triggerBody()?['academicYear']}'",
+      "$top": 5000
+    },
+    "host": {
+      "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+      "connection": "shared_commondataserviceforapps",
+      "operationId": "ListRecords"
+    }
+  },
+  "runAfter": {
+    "Inicializar_variable": [
+      "Succeeded"
+    ]
+  },
+  "metadata": {
+    "operationMetadataId": "691b9cb8-4341-42c5-bcf1-1320113ae518"
+  }
+}
+
+4. Ordenar matriz
+
+{
+  "type": "Sort",
+  "inputs": {
+    "from": "@outputs('Enumerar_filas')?['body/value']",
+    "sortBy": "cr955_norden"
+  },
+  "runAfter": {
+    "Enumerar_filas": [
+      "Succeeded"
+    ]
+  },
+  "metadata": {
+    "operationMetadataId": "sort-array-norden"
+  }
+}
+
+5. ExpectedNOrden (inicializar variable)
+
+{
+  "type": "InitializeVariable",
+  "inputs": {
+    "variables": [
+      {
+        "name": "ExpectedNOrden",
+        "type": "integer",
+        "value": 1
+      }
+    ]
+  },
+  "runAfter": {
+    "Ordenar_matriz": [
+      "Succeeded"
+    ]
+  },
+  "metadata": {
+    "operationMetadataId": "7fa3f3d9-e2e4-4727-9792-ed5fd76135b7"
+  }
+}
+
+6. FinalNOrden (inicializar variable)
+
+{
+  "type": "InitializeVariable",
+  "inputs": {
+    "variables": [
+      {
+        "name": "FinalNOrden",
+        "type": "integer",
+        "value": 0
+      }
+    ]
+  },
+  "runAfter": {
+    "ExpectedNOrden": [
+      "Succeeded"
+    ]
+  },
+  "metadata": {
+    "operationMetadataId": "05bd4d48-c628-4bab-b14a-bbcbb9d58648"
+  }
+}
+
+7. Apply to each 1
+
+{
+  "type": "Foreach",
+  "foreach": "@outputs('Ordenar_matriz')?['body']",
+  "actions": {
+    "Condition": {
+      "type": "If",
+      "expression": {
+        "and": [
+          {
+            "equals": [
+              "@items('Apply_to_each_1')?['cr955_norden']",
+              "@variables('ExpectedNOrden')"
+            ]
+          }
+        ]
+      },
+      "actions": {
+        "Increment_variable": {
+          "type": "IncrementVariable",
+          "inputs": {
+            "name": "ExpectedNOrden",
+            "value": 1
+          }
+        }
+      },
+      "else": {
+        "actions": {
+          "Set_variable": {
+            "type": "SetVariable",
+            "inputs": {
+              "name": "FinalNOrden",
+              "value": "@variables('ExpectedNOrden')"
+            }
+          }
+        }
+      }
+    }
+  },
+  "runAfter": {
+    "FinalNOrden": [
+      "Succeeded"
+    ]
+  }
+}
 
 
-3. Dataverse
+
+8. Condition_1 (post-loop)
+
+{
+  "type": "If",
+  "expression": {
+    "and": [
+      {
+        "equals": [
+          "@variables('FinalNOrden')",
+          0
+        ]
+      }
+    ]
+  },
+  "actions": {
+    "Set_variable_1": {
+      "type": "SetVariable",
+      "inputs": {
+        "name": "FinalNOrden",
+        "value": "@variables('ExpectedNOrden')"
+      }
+    }
+  },
+  "else": {
+    "actions": {}
+  },
+  "runAfter": {
+    "Apply_to_each_1": [
+      "SUCCEEDED"
+    ]
+  }
+}
+
+9. Compose
+
+{
+  "type": "Compose",
+  "inputs": "@triggerBody()?['nOrden']\r\n",
+  "runAfter": {
+    "Condition_1": [
+      "SUCCEEDED"
+    ]
+  },
+  "metadata": {
+    "operationMetadataId": "c56e1d35-ce13-44a0-938b-d85c077ef9a7"
+  }
+}
+
+10. Dataverse
 
 {
   "type": "OpenApiConnection",
@@ -842,6 +1027,7 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
       "item/cpmmr_horasalida": "@triggerBody()?['horaSalidaEstudios']",
       "item/cpmmr_localidad": "@triggerBody()?['localidad']",
       "item/cpmmr_nombre": "@triggerBody()?['nombre']",
+      "item/cr955_norden": "@variables('FinalNOrden')",
       "item/cpmmr_provincia": "@triggerBody()?['provincia']",
       "item/cpmmr_reducciontasas": "@triggerBody()?['tipoReduccion']",
       "item/cpmmr_telefono": "@triggerBody()?['telefono']"
@@ -853,7 +1039,7 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
     }
   },
   "runAfter": {
-    "Inicializar_variable": [
+    "Compose": [
       "Succeeded"
     ]
   },
@@ -862,8 +1048,33 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
   }
 }
 
+11.Update a row
 
-4. Aply to each
+{
+  "type": "OpenApiConnection",
+  "inputs": {
+    "parameters": {
+      "entityName": "cpmmr_matriculas",
+      "recordId": "@outputs('Dataverse')?['body/cpmmr_matriculaid']",
+      "item/cr955_cursoescolar": "@triggerBody()?['cursoEscolar']"
+    },
+    "host": {
+      "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+      "connection": "shared_commondataserviceforapps",
+      "operationId": "UpdateOnlyRecord"
+    }
+  },
+  "runAfter": {
+    "Dataverse": [
+      "Succeeded"
+    ]
+  },
+  "metadata": {
+    "operationMetadataId": "ea916287-2e19-4ae0-b8e9-de6676a424ab"
+  }
+}
+
+12. Aply to each
 
 {
   "type": "Foreach",
@@ -889,6 +1100,9 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
         "List_rows": [
           "Succeeded"
         ]
+      },
+      "metadata": {
+        "operationMetadataId": "1de8a906-60e9-4662-b30b-cceccfdbad77"
       }
     },
     "List_rows": {
@@ -904,102 +1118,45 @@ URL: https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com
           "connection": "shared_commondataserviceforapps",
           "operationId": "ListRecords"
         }
+      },
+      "metadata": {
+        "operationMetadataId": "c4ec02dd-a340-40ea-baea-13ba447ab647"
       }
     }
   },
   "runAfter": {
-    "Dataverse": [
+    "Update_a_row": [
       "Succeeded"
     ]
+  },
+  "metadata": {
+    "operationMetadataId": "25bb2b47-d40e-4990-bb20-3a73f02babf7"
   }
 }
 
-
-4.1. List rows
-
-{
-  "type": "OpenApiConnection",
-  "inputs": {
-    "parameters": {
-      "entityName": "cr955_asignaturases",
-      "$filter": "@concat('cr955_coursecode eq ',items('Apply_to_each')?['codigo'])",
-      "$top": 1
-    },
-    "host": {
-      "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
-      "connection": "shared_commondataserviceforapps",
-      "operationId": "ListRecords"
-    }
-  }
-}
-
-4.2. Add a new row
+13. Respuesta
 
 {
-  "type": "OpenApiConnection",
+  "type": "Response",
+  "kind": "Http",
   "inputs": {
-    "parameters": {
-      "entityName": "cr955_matriculaasignaturas",
-      "item/cr955_name": "@items('Apply_to_each')?['nombre']",
-      "item/cr955_Asignatura@odata.bind": "@concat('/cr955_asignaturases(',first(outputs('List_rows')?['body/value'])?['cr955_asignaturasid'],')')",
-      "item/cr955_estadoasignatura": "@if(equals(items('Apply_to_each')?['tipo'],'Convalidacion'),904390001,if(equals(items('Apply_to_each')?['tipo'],'Pendiente'),904390004,904390000))",
-      "item/cr955_Matricula@odata.bind": "@concat('/cpmmr_matriculas(',outputs('Dataverse')?['body/cpmmr_matriculaid'],')')"
+    "statusCode": 200,
+    "headers": {
+      "Content-Type": "application/json"
     },
-    "host": {
-      "apiId": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
-      "connection": "shared_commondataserviceforapps",
-      "operationId": "CreateRecord"
+    "body": {
+      "rowId": "@{outputs('Dataverse')?['body/cpmmr_matriculaid']}",
+      "nOrden": "@{variables('FinalNOrden')}"
     }
   },
   "runAfter": {
-    "List_rows": [
+    "Apply_to_each": [
       "Succeeded"
     ]
+  },
+  "metadata": {
+    "operationMetadataId": "d77c55f4-ba7c-4e22-a4d4-57ac2ebcd077"
   }
-}
-
-5. Respuesta
-
-{
-
-&#x20; "type": "Response",
-
-&#x20; "kind": "Http",
-
-&#x20; "inputs": {
-
-&#x20;   "statusCode": 200,
-
-&#x20;   "headers": {
-
-&#x20;     "Content-Type": "application/json"
-
-&#x20;   },
-
-&#x20;   "body": {
-
-&#x20;     "rowId": "@{outputs('Dataverse')?\['body/cpmmr\_matriculaid']}"
-
-&#x20;   }
-
-&#x20; },
-
-&#x20; "runAfter": {
-
-&#x20;   "Dataverse": \[
-
-&#x20;     "Succeeded"
-
-&#x20;   ]
-
-&#x20; },
-
-&#x20; "metadata": {
-
-&#x20;   "operationMetadataId": "d77c55f4-ba7c-4e22-a4d4-57ac2ebcd077"
-
-&#x20; }
-
 }
 
 

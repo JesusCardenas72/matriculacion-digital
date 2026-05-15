@@ -227,6 +227,7 @@ export default function App() {
 
   // ── Endpoints directos a Power Automate (sin backend intermedio) ────────────
   const PA_DUPLICADOS_URL = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b62c3d4b21d24bda8daa75a8586198eb/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=4nqPljifCY1CBxAiKj03La2YEksNn78meKn9-nlXGCk';
+  const PA_NORDEM_URL     = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/046ad596f6eb4e919d17aff5c8c567f4/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=tvSwEUEfq-lI-Au8YLOtpD5KNyfskQhuuhJ3NGEloww';
   const PA_CREAR_URL      = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ec7a2a1c67974d32ba23de811d20e93d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3G39Rx3ZC55SKVIoBGvRufw-d6J6fYl74GOi46We9f0';
   const PA_PDF_URL        = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b31521c981d04d95a8a6917a899f3988/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=i6YvgMW9GNJO-1Ynz0A3hAiNPGvZVpXkzbsdoeBYsfU';
   const [requestNumber, setRequestNumber] = useState<string | null>(null);
@@ -580,7 +581,7 @@ export default function App() {
         const ensenanzaCursoNum = formData.curso.replace(/\D/g, '');
         const ensenanzaCurso = ensenanzaCursoPrefix && ensenanzaCursoNum ? `${ensenanzaCursoPrefix}${ensenanzaCursoNum}` : '';
 
-        // ── Paso 1: Comprobar duplicados y obtener nOrden ───────────────────
+        // ── Paso 1: Comprobar duplicados ─────────────────────────────────────
         const resDup = await fetch(PA_DUPLICADOS_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -601,17 +602,25 @@ export default function App() {
         }
         if (!resDup.ok) throw new Error(`Error al comprobar duplicados (HTTP ${resDup.status})`);
 
-        const dupData = await resDup.json() as { ok?: boolean; reason?: string; requestNumber?: string };
+        const dupData = await resDup.json() as { ok?: boolean; reason?: string };
         if (dupData?.ok === false && dupData?.reason === 'duplicate') {
           setSubmitStatus('duplicate');
           setIsSubmitting(false);
           return;
         }
-        const requestNumberFromPA = dupData.requestNumber ?? '';
-        const parts = requestNumberFromPA.split('-');
-        const nOrden = parseInt(parts[parts.length - 1] ?? '1', 10) || 1;
 
-        // ── Paso 2: Crear registro en Dataverse ─────────────────────────────
+        // ── Paso 2: Obtener nOrden ───────────────────────────────────────────
+        const cursoEscolar = calcularCursoEscolar();
+        const resNOrden = await fetch(PA_NORDEM_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cursoEscolar }),
+        });
+        if (!resNOrden.ok) throw new Error(`Error al obtener nOrden (HTTP ${resNOrden.status})`);
+        const dataNOrden = await resNOrden.json() as { nOrden?: number };
+        const nOrdenCalculado: number = dataNOrden?.nOrden ?? 1;
+
+        // ── Paso 3: Crear registro en Dataverse ─────────────────────────────
         const asignaturasParaDataverse = [
           ...asignaturasCursoActual.map(a => ({
             codigo: a.MATERIA,
@@ -664,8 +673,8 @@ export default function App() {
           importe2oPago: formData.importe2oPago ?? '',
           estado: 'Recibida',
           academicYear,
-          cursoEscolar: calcularCursoEscolar(),
-          nOrden: String(nOrden),
+          cursoEscolar,
+          nOrden: nOrdenCalculado,
           asignaturas: asignaturasParaDataverse
         };
 
@@ -676,9 +685,12 @@ export default function App() {
         });
         if (!resCrear.ok) throw new Error(`Error al crear el registro (HTTP ${resCrear.status})`);
 
-        const dataCrear = await resCrear.json() as { ok?: boolean; rowId?: string };
+        const dataCrear = await resCrear.json() as { ok?: boolean; rowId?: string; nOrden?: number };
+        console.log('[DEBUG PA_CREAR respuesta]', JSON.stringify(dataCrear));
         const rowId: string = dataCrear?.rowId ?? '';
-        if (!rowId) throw new Error('No se recibió rowId del servidor');
+        const nOrden: number = dataCrear?.nOrden ?? 0;
+        if (!rowId) throw new Error(`No se recibió rowId del servidor`);
+        if (!nOrden) throw new Error(`Registro creado (${rowId}) pero nOrden devuelto es ${nOrden} — revisa la acción Response del flujo PA_CREAR`);
 
         reqNum = String(nOrden);
         setRequestNumber(reqNum);
