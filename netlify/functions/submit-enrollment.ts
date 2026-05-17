@@ -208,37 +208,44 @@ export const handler: Handler = async (event) => {
     // 2) Calcular NOrden correlativo dentro de (especialidad + ensenanzaCurso + cursoAcademico)
     const nOrden = await getNextNOrden(token, entitySet, especialidad, ensenanzaCurso, academicYear);
 
-    // 3) Crear registro principal en Solicitudes de Matrícula
-    const rowId = await createDataverseRecord(token, entitySet, {
-      cpmmr_nombre:               nombre,
-      cpmmr_apellidos:            apellidos,
-      cpmmr_nombrematricula:      [apellidos, nombre].filter(Boolean).join(', '),
-      cpmmr_dni:                  dni,
-      cpmmr_fechanacimiento:      str('fechaNacimiento') || null,
-      cpmmr_domicilio:            str('domicilio'),
-      cpmmr_localidad:            str('localidad'),
-      cpmmr_provincia:            str('provincia'),
-      cpmmr_cp:                   str('codigoPostal'),
-      cpmmr_email:                str('email'),
-      cpmmr_telefono:             str('telefono'),
-      cpmmr_horasalida:           str('horaSalidaEstudios'),
-      cpmmr_disponibilidadmanana: bool('disponibilidadManana'),
-      cpmmr_autorizacionimagen:   bool('autorizacionImagen'),
-      cpmmr_ensenanzaycurso:      ensenanzaCurso,
-      cpmmr_especialidad:         especialidad,
-      cpmmr_reducciontasas:       REDUCCION_TASAS_MAP[str('tipoReduccion')] ?? str('tipoReduccion'),
-      cpmmr_formadepago:          FORMA_PAGO_MAP[str('formaPago')] ?? str('formaPago'),
-      cpmmr_cursoacademico:       academicYear,
-      cr955_norden:               nOrden,
-      cr955_convalidacionsolicitada: bool('convalidacionSolicitada'),
-      cr955_convalidacionasignaturas: str('convalidacionAsignaturas'),
+    // 3) Reenviar a Power Automate con nOrden ya calculado.
+    //    El frontend nunca ve la URL con sig; solo el servidor la conoce.
+    const paUrl = process.env.POWER_AUTOMATE_WEBHOOK_URL;
+    if (!paUrl) {
+      throw new Error('POWER_AUTOMATE_WEBHOOK_URL no configurado en el servidor');
+    }
+
+    const paPayload = {
+      ...f,
+      nOrden,
+      academicYear,
+      cursoEscolar: academicYear,
+      ensenanzaCurso,
+    };
+
+    const paRes = await fetch(paUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(paPayload),
     });
 
-    // Devolver rowId y nOrden al frontend para la segunda llamada (upload-pdf)
+    if (!paRes.ok) {
+      const paErr = await paRes.text();
+      throw new Error(`Power Automate respondió ${paRes.status}: ${paErr}`);
+    }
+
+    const paData = (await paRes.json()) as { rowId?: string; nOrden?: number; ok?: boolean };
+    const rowId = paData?.rowId ?? '';
+    const nOrdenFinal = paData?.nOrden ?? nOrden;
+
+    if (!rowId) {
+      throw new Error('Power Automate no devolvió rowId');
+    }
+
     return {
       statusCode: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, rowId, nOrden }),
+      body: JSON.stringify({ ok: true, rowId, nOrden: nOrdenFinal }),
     };
 
   } catch (err) {

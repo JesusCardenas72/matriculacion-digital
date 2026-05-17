@@ -6,13 +6,13 @@ if (typeof globalThis.Buffer === 'undefined') {
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
-import AdminPanel from './AdminPanel.tsx';
+import AdminGate from './AdminGate.tsx';
 import './index.css';
 
 const isAdmin = new URLSearchParams(window.location.search).has('admin');
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isAdmin ? <AdminPanel /> : <App />}
+    {isAdmin ? <AdminGate /> : <App />}
   </StrictMode>,
 );

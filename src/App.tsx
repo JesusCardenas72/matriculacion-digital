@@ -225,11 +225,9 @@ export default function App() {
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
 
-  // ── Endpoints directos a Power Automate (sin backend intermedio) ────────────
-  const PA_DUPLICADOS_URL = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b62c3d4b21d24bda8daa75a8586198eb/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=4nqPljifCY1CBxAiKj03La2YEksNn78meKn9-nlXGCk';
-  const PA_NORDEM_URL     = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/046ad596f6eb4e919d17aff5c8c567f4/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=tvSwEUEfq-lI-Au8YLOtpD5KNyfskQhuuhJ3NGEloww';
-  const PA_CREAR_URL      = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ec7a2a1c67974d32ba23de811d20e93d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3G39Rx3ZC55SKVIoBGvRufw-d6J6fYl74GOi46We9f0';
-  const PA_PDF_URL        = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b31521c981d04d95a8a6917a899f3988/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=i6YvgMW9GNJO-1Ynz0A3hAiNPGvZVpXkzbsdoeBYsfU';
+  // ── Endpoints al backend (sin exponer sig de Power Automate) ───────────────
+  const API_SUBMIT_URL = import.meta.env.VITE_POWER_AUTOMATE_URL;
+  const API_UPLOAD_URL = import.meta.env.VITE_POWER_AUTOMATE_URL_PDF;
   const [requestNumber, setRequestNumber] = useState<string | null>(null);
 
   const cursos = useMemo(() => {
@@ -580,47 +578,8 @@ export default function App() {
         const ensenanzaCursoPrefix = formData.tipoEnsenanza === 'elemental' ? 'EE' : formData.tipoEnsenanza === 'profesional' ? 'EP' : '';
         const ensenanzaCursoNum = formData.curso.replace(/\D/g, '');
         const ensenanzaCurso = ensenanzaCursoPrefix && ensenanzaCursoNum ? `${ensenanzaCursoPrefix}${ensenanzaCursoNum}` : '';
-
-        // ── Paso 1: Comprobar duplicados ─────────────────────────────────────
-        const resDup = await fetch(PA_DUPLICADOS_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nombre: formData.nombre,
-            apellidos: formData.apellidos,
-            dni: formData.dni,
-            especialidad: formData.especialidad,
-            tipoEnsenanza: formData.tipoEnsenanza,
-            curso: formData.curso,
-            academicYear,
-          }),
-        });
-        if (resDup.status === 409) {
-          setSubmitStatus('duplicate');
-          setIsSubmitting(false);
-          return;
-        }
-        if (!resDup.ok) throw new Error(`Error al comprobar duplicados (HTTP ${resDup.status})`);
-
-        const dupData = await resDup.json() as { ok?: boolean; reason?: string };
-        if (dupData?.ok === false && dupData?.reason === 'duplicate') {
-          setSubmitStatus('duplicate');
-          setIsSubmitting(false);
-          return;
-        }
-
-        // ── Paso 2: Obtener nOrden ───────────────────────────────────────────
         const cursoEscolar = calcularCursoEscolar();
-        const resNOrden = await fetch(PA_NORDEM_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cursoEscolar }),
-        });
-        if (!resNOrden.ok) throw new Error(`Error al obtener nOrden (HTTP ${resNOrden.status})`);
-        const dataNOrden = await resNOrden.json() as { nOrden?: number };
-        const nOrdenCalculado: number = dataNOrden?.nOrden ?? 1;
 
-        // ── Paso 3: Crear registro en Dataverse ─────────────────────────────
         const asignaturasParaDataverse = [
           ...asignaturasCursoActual.map(a => ({
             codigo: a.MATERIA,
@@ -634,7 +593,12 @@ export default function App() {
           }))
         ];
 
-        const jsonPayload = {
+        // ── Paso 1: Enviar matrícula al backend (duplicados + nOrden + creación) ─
+        if (!API_SUBMIT_URL) {
+          throw new Error('VITE_POWER_AUTOMATE_URL no configurada');
+        }
+
+        const submitPayload = {
           nombre: formData.nombre,
           apellidos: formData.apellidos,
           dni: formData.dni,
@@ -674,37 +638,51 @@ export default function App() {
           estado: 'Recibida',
           academicYear,
           cursoEscolar,
-          nOrden: nOrdenCalculado,
           asignaturas: asignaturasParaDataverse
         };
 
-        const resCrear = await fetch(PA_CREAR_URL, {
+        const resSubmit = await fetch(API_SUBMIT_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(jsonPayload),
+          body: JSON.stringify(submitPayload),
         });
-        if (!resCrear.ok) throw new Error(`Error al crear el registro (HTTP ${resCrear.status})`);
 
-        const dataCrear = await resCrear.json() as { ok?: boolean; rowId?: string; nOrden?: number };
-        console.log('[DEBUG PA_CREAR respuesta]', JSON.stringify(dataCrear));
-        const rowId: string = dataCrear?.rowId ?? '';
-        const nOrden: number = dataCrear?.nOrden ?? 0;
-        if (!rowId) throw new Error(`No se recibió rowId del servidor`);
-        if (!nOrden) throw new Error(`Registro creado (${rowId}) pero nOrden devuelto es ${nOrden} — revisa la acción Response del flujo PA_CREAR`);
+        if (resSubmit.status === 409) {
+          setSubmitStatus('duplicate');
+          setIsSubmitting(false);
+          return;
+        }
+        if (!resSubmit.ok) throw new Error(`Error al enviar la matrícula (HTTP ${resSubmit.status})`);
+
+        const submitData = await resSubmit.json() as { ok?: boolean; rowId?: string; nOrden?: number; reason?: string };
+        if (submitData?.ok === false && submitData?.reason === 'duplicate') {
+          setSubmitStatus('duplicate');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const rowId: string = submitData?.rowId ?? '';
+        const nOrden: number = submitData?.nOrden ?? 0;
+        if (!rowId) throw new Error('No se recibió rowId del servidor');
+        if (!nOrden) throw new Error(`Registro creado (${rowId}) pero nOrden devuelto es ${nOrden}`);
 
         reqNum = String(nOrden);
         setRequestNumber(reqNum);
 
         ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
 
-        // ── Paso 3: Subir PDF + email + asignaturas ─────────────────────────
+        // ── Paso 2: Subir PDF + email ────────────────────────────────────────
+        if (!API_UPLOAD_URL) {
+          throw new Error('VITE_POWER_AUTOMATE_URL_PDF no configurada');
+        }
+
         const perfilEmailLabel =
           formData.perfilProfesional === 'A' ? 'Perfil A — Fundamentos de Composición'
           : formData.perfilProfesional === 'B' ? (formData.curso.includes('5') ? 'Perfil B — Improvisación / Informática Musical' : 'Perfil B — Didáctica Musical / Improvisación')
           : formData.perfilProfesional === 'C' ? (formData.curso.includes('5') ? 'Perfil C — Improvisación / Instrumento Complementario' : 'Perfil C — Improvisación / Música Moderna')
           : '';
 
-        const resPdf = await fetch(PA_PDF_URL, {
+        const resPdf = await fetch(API_UPLOAD_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
