@@ -568,6 +568,7 @@ export default function App() {
         selectedPendingSubjects={selectedPendingSubjects}
         calculation={calculation}
         requestNumber={reqNum ?? undefined}
+        allPendingFromLastCourse={allPendingFromLastCourse}
       />
     ).toBlob();
 

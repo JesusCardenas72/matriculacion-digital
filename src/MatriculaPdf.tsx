@@ -30,6 +30,7 @@ export interface MatriculaPdfProps {
   selectedPendingSubjects: PendingSubject[];
   calculation: CalcResult;
   requestNumber?: string;
+  allPendingFromLastCourse?: boolean;
 }
 
 const C = {
@@ -96,7 +97,7 @@ const DesgloseRow = ({ label, value, highlight, discount }: { label: string; val
   </View>
 );
 
-const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asignaturasCursoActual, selectedPendingSubjects, calculation, requestNumber }: MatriculaPdfProps) => {
+const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asignaturasCursoActual, selectedPendingSubjects, calculation, requestNumber, allPendingFromLastCourse }: MatriculaPdfProps) => {
   const fechaFmt = formData.fechaNacimiento ? new Date(formData.fechaNacimiento + 'T12:00:00').toLocaleDateString('es-ES') : '';
 
   const perfilLabel =
@@ -306,6 +307,14 @@ const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asigna
             <View style={{ flex: 1.6 }}><Field label="Tipo de Ensenanza" value={formData.tipoEnsenanza === 'elemental' ? 'Ensenanza Elemental' : formData.tipoEnsenanza === 'profesional' ? 'Ensenanza Profesional' : '—'} /></View>
             <View style={{ width: 42 }}><Field label="Curso" value={formData.curso} /></View>
             <View style={{ flex: 1.4 }}><Field label="Especialidad" value={formData.especialidad} /></View>
+            {formData.esRepetidor && (
+              <View style={{ width: 60 }}>
+                <Text style={s.fieldLabel}>Repetidor</Text>
+                <View style={{ backgroundColor: C.gray900, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 4, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.white }}>SI</Text>
+                </View>
+              </View>
+            )}
             <View style={{ flex: 1.4 }}>
               {showPerfil ? (
                 <>
@@ -323,10 +332,12 @@ const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asigna
             const convAsigs = formData.convalidacionAsignaturas ?? [];
             type SubjectRow = { group: 1 | 2 | 3; key: string; code: string; name: string; tipo: 'matriculada' | 'perfil' | 'pendiente' };
             const rows: SubjectRow[] = [];
-            for (const m of asignaturasCursoActual) {
-              if (convAsigs.includes(m.MATERIA)) continue;
-              const isPerfil = PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
-              rows.push({ group: isPerfil ? 2 : 1, key: m.MATERIA, code: m.MATERIA, name: m.DESCRIPCION, tipo: isPerfil ? 'perfil' : 'matriculada' });
+            if (!allPendingFromLastCourse) {
+              for (const m of asignaturasCursoActual) {
+                if (convAsigs.includes(m.MATERIA)) continue;
+                const isPerfil = PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
+                rows.push({ group: isPerfil ? 2 : 1, key: m.MATERIA, code: m.MATERIA, name: m.DESCRIPCION, tipo: isPerfil ? 'perfil' : 'matriculada' });
+              }
             }
             for (const m of selectedPendingSubjects) {
               rows.push({ group: 3, key: `pending-${m.id}`, code: m.materiaId, name: m.label, tipo: 'pendiente' });
