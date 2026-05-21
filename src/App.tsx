@@ -251,10 +251,7 @@ export default function App() {
     const fees = FEES[formData.tipoEnsenanza as 'elemental' | 'profesional'];
     let cursoBase = (fees.cursos as any)[formData.curso] || 0;
 
-    const isRepetidorEfectivo = !!formData.esRepetidor && (
-      (formData.tipoEnsenanza === 'elemental' && formData.curso === '4º') ||
-      (formData.tipoEnsenanza === 'profesional' && formData.curso === '6º')
-    );
+    const isRepetidorEfectivo = !!formData.esRepetidor;
     const repMultiplier = isRepetidorEfectivo ? 1.2 : 1;
 
     let subtotalAdmin = fees.serviciosGenerales * repMultiplier;
@@ -1810,6 +1807,15 @@ export default function App() {
               </div>
             </div>
 
+            {formData.esRepetidor && formData.esPrimerAno && (
+              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl mb-2">
+                <AlertCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
+                <p className="text-sm text-red-700 font-medium leading-relaxed">
+                  <span className="font-bold">Incongruencia detectada:</span> Un alumno repetidor no puede ser primer año en el centro al mismo tiempo. Revisa los campos <span className="font-bold">Repetidor</span> y <span className="font-bold">Primer año</span> antes de continuar.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[
                 { id: 'unico', label: 'Opción 1', title: 'Pago Único', desc: 'Total a ingresar en un solo pago' },
@@ -1851,49 +1857,65 @@ export default function App() {
                   <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
                     <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Desglose de Tasas</h3>
                     <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">{calculation.details.repetidorMode ? 'Servicios Generales — Repetidor +20%' : 'Servicios Generales'}</span>
-                        <span className="font-medium">{calculation.details.serviciosGenerales.toFixed(2)}€</span>
-                      </div>
-                      {formData.esPrimerAno && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">{calculation.details.repetidorMode ? 'Apertura de Expediente — Repetidor +20%' : 'Apertura de Expediente'}</span>
-                          <span className="font-medium">{calculation.details.aperturaExpediente.toFixed(2)}€</span>
-                        </div>
-                      )}
-                      {calculation.details.repetidorMode !== 'suelta' && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">
-                            {calculation.details.repetidorMode === 'completo'
-                              ? `Matrícula Curso (${formData.curso}) — Repetidor +20%`
-                              : `Matrícula Curso (${formData.curso})`}
-                          </span>
-                          <span className="font-medium">{calculation.details.curso.toFixed(2)}€</span>
-                        </div>
-                      )}
-                      {calculation.details.asignaturasPendientes > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">
-                            {calculation.details.repetidorMode === 'suelta'
-                              ? 'Asignaturas Repetidor (+20%)'
-                              : 'Asignaturas Pendientes'}
-                          </span>
-                          <span className="font-medium">{calculation.details.asignaturasPendientes.toFixed(2)}€</span>
-                        </div>
-                      )}
-                      {calculation.details.convalidacionDiscount > 0 && renderConvalidacionRow(calculation.details.convalidacionCount, calculation.details.convalidacionDiscount)}
-                      {calculation.details.matriculaHonorDiscount > 0 && (
-                        <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
-                          <span>Matrícula de Honor (Art. 13)</span>
-                          <span>-{calculation.details.matriculaHonorDiscount.toFixed(2)}€</span>
-                        </div>
-                      )}
-                      {calculation.details.multiplier < 1 && (
-                        <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
-                          <span>Reducción aplicada</span>
-                          <span>-{((1 - calculation.details.multiplier) * 100).toFixed(0)}%</span>
-                        </div>
-                      )}
+                      {(() => {
+                        const d = calculation.details;
+                        const rep = !!d.repetidorMode;
+                        const badge = rep ? <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1 py-0.5">(+20%)</span> : null;
+                        const totalConceptos =
+                          d.serviciosGenerales +
+                          d.aperturaExpediente +
+                          (d.repetidorMode !== 'suelta' ? d.curso : 0) +
+                          d.asignaturasPendientes -
+                          d.convalidacionDiscount -
+                          d.matriculaHonorDiscount;
+                        return (
+                          <>
+                            <div className="flex justify-between text-sm items-center">
+                              <span className="text-gray-500 flex items-center">Servicios Generales{badge}</span>
+                              <span className="font-medium">{d.serviciosGenerales.toFixed(2)}€</span>
+                            </div>
+                            {formData.esPrimerAno && (
+                              <div className="flex justify-between text-sm items-center">
+                                <span className="text-gray-500 flex items-center">Apertura de Expediente{badge}</span>
+                                <span className="font-medium">{d.aperturaExpediente.toFixed(2)}€</span>
+                              </div>
+                            )}
+                            {d.repetidorMode !== 'suelta' && (
+                              <div className="flex justify-between text-sm items-center">
+                                <span className="text-gray-500 flex items-center">
+                                  Matrícula Curso ({formData.curso}){d.repetidorMode === 'completo' ? badge : null}
+                                </span>
+                                <span className="font-medium">{d.curso.toFixed(2)}€</span>
+                              </div>
+                            )}
+                            {d.asignaturasPendientes > 0 && (
+                              <div className="flex justify-between text-sm items-center">
+                                <span className="text-gray-500 flex items-center">
+                                  Asignaturas Pendientes{d.repetidorMode === 'suelta' ? badge : null}
+                                </span>
+                                <span className="font-medium">{d.asignaturasPendientes.toFixed(2)}€</span>
+                              </div>
+                            )}
+                            {d.convalidacionDiscount > 0 && renderConvalidacionRow(d.convalidacionCount, d.convalidacionDiscount)}
+                            {d.matriculaHonorDiscount > 0 && (
+                              <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
+                                <span>Matrícula de Honor (Art. 13)</span>
+                                <span>-{d.matriculaHonorDiscount.toFixed(2)}€</span>
+                              </div>
+                            )}
+                            {d.multiplier < 1 && (
+                              <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
+                                <span>Reducción aplicada</span>
+                                <span>-{((1 - d.multiplier) * 100).toFixed(0)}%</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-sm pt-3 mt-1 border-t-2 border-gray-200 font-bold">
+                              <span className="text-gray-700">Total Tasas</span>
+                              <span className="text-gray-900">{totalConceptos.toFixed(2)}€</span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </motion.div>
