@@ -30,6 +30,7 @@ export interface EnrollmentFormData {
   // Asignaturas pendientes
   asignaturaPendiente1: string;
   asignaturaPendiente2?: string;
+  esRepetidor?: boolean;
   
   // Perfiles (5º y 6º Profesional)
   perfilProfesional: 'A' | 'B' | 'C' | '';

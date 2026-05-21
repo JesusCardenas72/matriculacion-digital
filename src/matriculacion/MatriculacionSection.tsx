@@ -272,6 +272,7 @@ export function MatriculacionSection({ formData, onChange, onConvalidacionClick 
                         selectedPendingSubjects={selectedPendingSubjects}
                         convalidacionAsignaturas={formData.convalidacionAsignaturas}
                         perfilProfesional={formData.perfilProfesional}
+                        is5o6Profesional={is5o6Profesional}
                       />
                     </div>
                   </div>
@@ -354,6 +355,7 @@ interface SubjectListProps {
   selectedPendingSubjects: { id: string; label: string; materiaId: string }[];
   convalidacionAsignaturas: string[];
   perfilProfesional: string;
+  is5o6Profesional: boolean;
 }
 
 const STYLES = {
@@ -388,6 +390,7 @@ function SubjectList({
   selectedPendingSubjects,
   convalidacionAsignaturas,
   perfilProfesional,
+  is5o6Profesional,
 }: SubjectListProps) {
   type Tipo = 'matriculada' | 'perfil' | 'pendiente' | 'convalidada';
   type Row = { group: number; key: string; code: string; name: string; tipo: Tipo };
@@ -396,7 +399,7 @@ function SubjectList({
 
   for (const m of asignaturasCursoActual) {
     const isConvalidada = convalidacionAsignaturas.includes(m.MATERIA);
-    const isPerfil = !isConvalidada && PROFILE_SPECIFIC_SUBJECTS.some(s =>
+    const isPerfil = !isConvalidada && is5o6Profesional && PROFILE_SPECIFIC_SUBJECTS.some(s =>
       m.DESCRIPCION.toLowerCase().includes(s.toLowerCase())
     );
     rows.push({

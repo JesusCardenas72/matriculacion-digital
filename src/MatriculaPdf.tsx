@@ -18,6 +18,7 @@ export type CalcResult = {
     multiplier: number;
     convalidacionDiscount: number;
     convalidacionCount: number;
+    repetidorMode?: 'suelta' | 'completo' | null;
   };
 } | null;
 
@@ -242,10 +243,20 @@ const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asigna
               {d && (
                 <View style={{ backgroundColor: C.gray50, borderRadius: 5, padding: 8, borderWidth: 1, borderColor: C.gray100, borderStyle: 'solid', marginBottom: 8 }}>
                   <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray400, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }}>Desglose de Tasas</Text>
-                  <DesgloseRow label="Servicios Generales" value={`${d.serviciosGenerales.toFixed(2)} EUR`} />
-                  {d.aperturaExpediente > 0 && <DesgloseRow label="Apertura de Expediente" value={`${d.aperturaExpediente.toFixed(2)} EUR`} />}
-                  <DesgloseRow label={`Matricula Curso (${formData.curso})`} value={`${d.curso.toFixed(2)} EUR`} />
-                  {d.asignaturasPendientes > 0 && <DesgloseRow label="Asignaturas Pendientes" value={`${d.asignaturasPendientes.toFixed(2)} EUR`} />}
+                  <DesgloseRow label={d.repetidorMode ? 'Servicios Generales — Repetidor +20%' : 'Servicios Generales'} value={`${d.serviciosGenerales.toFixed(2)} EUR`} />
+                  {d.aperturaExpediente > 0 && <DesgloseRow label={d.repetidorMode ? 'Apertura de Expediente — Repetidor +20%' : 'Apertura de Expediente'} value={`${d.aperturaExpediente.toFixed(2)} EUR`} />}
+                  {d.repetidorMode !== 'suelta' && (
+                    <DesgloseRow
+                      label={d.repetidorMode === 'completo' ? `Matricula Curso (${formData.curso}) Repetidor +20%` : `Matricula Curso (${formData.curso})`}
+                      value={`${d.curso.toFixed(2)} EUR`}
+                    />
+                  )}
+                  {d.asignaturasPendientes > 0 && (
+                    <DesgloseRow
+                      label={d.repetidorMode === 'suelta' ? `Asig. Repetidor (+20%)` : 'Asignaturas Pendientes'}
+                      value={`${d.asignaturasPendientes.toFixed(2)} EUR`}
+                    />
+                  )}
                   {d.matriculaHonorDiscount > 0 && (
                     <View style={{ borderTopWidth: 1, borderTopColor: C.gray200, borderTopStyle: 'solid', marginTop: 2 }}>
                       <DesgloseRow label="Matricula de Honor (Art. 13)" value={`-${d.matriculaHonorDiscount.toFixed(2)} EUR`} discount />
