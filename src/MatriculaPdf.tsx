@@ -18,6 +18,7 @@ export type CalcResult = {
     multiplier: number;
     convalidacionDiscount: number;
     convalidacionCount: number;
+    repetidorMode?: 'suelta' | 'completo' | null;
   };
 } | null;
 
@@ -29,6 +30,7 @@ export interface MatriculaPdfProps {
   selectedPendingSubjects: PendingSubject[];
   calculation: CalcResult;
   requestNumber?: string;
+  allPendingFromLastCourse?: boolean;
 }
 
 const C = {
@@ -95,7 +97,7 @@ const DesgloseRow = ({ label, value, highlight, discount }: { label: string; val
   </View>
 );
 
-const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asignaturasCursoActual, selectedPendingSubjects, calculation, requestNumber }: MatriculaPdfProps) => {
+const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asignaturasCursoActual, selectedPendingSubjects, calculation, requestNumber, allPendingFromLastCourse }: MatriculaPdfProps) => {
   const fechaFmt = formData.fechaNacimiento ? new Date(formData.fechaNacimiento + 'T12:00:00').toLocaleDateString('es-ES') : '';
 
   const perfilLabel =
@@ -242,10 +244,20 @@ const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asigna
               {d && (
                 <View style={{ backgroundColor: C.gray50, borderRadius: 5, padding: 8, borderWidth: 1, borderColor: C.gray100, borderStyle: 'solid', marginBottom: 8 }}>
                   <Text style={{ fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray400, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4 }}>Desglose de Tasas</Text>
-                  <DesgloseRow label="Servicios Generales" value={`${d.serviciosGenerales.toFixed(2)} EUR`} />
-                  {d.aperturaExpediente > 0 && <DesgloseRow label="Apertura de Expediente" value={`${d.aperturaExpediente.toFixed(2)} EUR`} />}
-                  <DesgloseRow label={`Matricula Curso (${formData.curso})`} value={`${d.curso.toFixed(2)} EUR`} />
-                  {d.asignaturasPendientes > 0 && <DesgloseRow label="Asignaturas Pendientes" value={`${d.asignaturasPendientes.toFixed(2)} EUR`} />}
+                  <DesgloseRow label={d.repetidorMode ? 'Servicios Generales — Repetidor +20%' : 'Servicios Generales'} value={`${d.serviciosGenerales.toFixed(2)} EUR`} />
+                  {d.aperturaExpediente > 0 && <DesgloseRow label={d.repetidorMode ? 'Apertura de Expediente — Repetidor +20%' : 'Apertura de Expediente'} value={`${d.aperturaExpediente.toFixed(2)} EUR`} />}
+                  {d.repetidorMode !== 'suelta' && (
+                    <DesgloseRow
+                      label={d.repetidorMode === 'completo' ? `Matricula Curso (${formData.curso}) Repetidor +20%` : `Matricula Curso (${formData.curso})`}
+                      value={`${d.curso.toFixed(2)} EUR`}
+                    />
+                  )}
+                  {d.asignaturasPendientes > 0 && (
+                    <DesgloseRow
+                      label={d.repetidorMode === 'suelta' ? `Asig. Repetidor (+20%)` : 'Asignaturas Pendientes'}
+                      value={`${d.asignaturasPendientes.toFixed(2)} EUR`}
+                    />
+                  )}
                   {d.matriculaHonorDiscount > 0 && (
                     <View style={{ borderTopWidth: 1, borderTopColor: C.gray200, borderTopStyle: 'solid', marginTop: 2 }}>
                       <DesgloseRow label="Matricula de Honor (Art. 13)" value={`-${d.matriculaHonorDiscount.toFixed(2)} EUR`} discount />
@@ -295,6 +307,14 @@ const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asigna
             <View style={{ flex: 1.6 }}><Field label="Tipo de Ensenanza" value={formData.tipoEnsenanza === 'elemental' ? 'Ensenanza Elemental' : formData.tipoEnsenanza === 'profesional' ? 'Ensenanza Profesional' : '—'} /></View>
             <View style={{ width: 42 }}><Field label="Curso" value={formData.curso} /></View>
             <View style={{ flex: 1.4 }}><Field label="Especialidad" value={formData.especialidad} /></View>
+            {formData.esRepetidor && (
+              <View style={{ width: 60 }}>
+                <Text style={s.fieldLabel}>Repetidor</Text>
+                <View style={{ backgroundColor: C.gray900, borderRadius: 4, paddingHorizontal: 7, paddingVertical: 4, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.white }}>SI</Text>
+                </View>
+              </View>
+            )}
             <View style={{ flex: 1.4 }}>
               {showPerfil ? (
                 <>
@@ -312,10 +332,12 @@ const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asigna
             const convAsigs = formData.convalidacionAsignaturas ?? [];
             type SubjectRow = { group: 1 | 2 | 3; key: string; code: string; name: string; tipo: 'matriculada' | 'perfil' | 'pendiente' };
             const rows: SubjectRow[] = [];
-            for (const m of asignaturasCursoActual) {
-              if (convAsigs.includes(m.MATERIA)) continue;
-              const isPerfil = PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
-              rows.push({ group: isPerfil ? 2 : 1, key: m.MATERIA, code: m.MATERIA, name: m.DESCRIPCION, tipo: isPerfil ? 'perfil' : 'matriculada' });
+            if (!allPendingFromLastCourse) {
+              for (const m of asignaturasCursoActual) {
+                if (convAsigs.includes(m.MATERIA)) continue;
+                const isPerfil = PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
+                rows.push({ group: isPerfil ? 2 : 1, key: m.MATERIA, code: m.MATERIA, name: m.DESCRIPCION, tipo: isPerfil ? 'perfil' : 'matriculada' });
+              }
             }
             for (const m of selectedPendingSubjects) {
               rows.push({ group: 3, key: `pending-${m.id}`, code: m.materiaId, name: m.label, tipo: 'pendiente' });

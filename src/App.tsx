@@ -46,6 +46,7 @@ export default function App() {
     especialidad: '',
     asignaturaPendiente1: '',
     asignaturaPendiente2: '',
+    esRepetidor: false,
     perfilProfesional: '',
     formaPago: 'unico',
     familiaNumerosa: false,
@@ -136,89 +137,6 @@ export default function App() {
     if (el) fieldRefs.current[name] = el;
   };
 
-  const calculation = useMemo(() => {
-    if (!formData.tipoEnsenanza || !formData.curso) return null;
-
-    const fees = FEES[formData.tipoEnsenanza as 'elemental' | 'profesional'];
-    let cursoBase = (fees.cursos as any)[formData.curso] || 0;
-    
-    let subtotalAdmin = fees.serviciosGenerales;
-    if (formData.esPrimerAno) subtotalAdmin += fees.aperturaExpediente;
-
-    let subtotalAcad = cursoBase;
-    
-    // Asignaturas sueltas (pendientes) - Se aplica automáticamente el recargo del 20%
-    let pending1Cost = formData.asignaturaPendiente1 ? fees.precioAsignatura * 1.2 : 0;
-    let pending2Cost = formData.asignaturaPendiente2 ? fees.precioAsignatura * 1.2 : 0;
-
-    subtotalAcad += pending1Cost + pending2Cost;
-
-    // Convalidación: descuenta precioAsignatura por cada asignatura convalidada
-    const numConvalidadas = formData.convalidacionSolicitada
-      ? (formData.convalidacionAsignaturas ?? []).length
-      : 0;
-    const convalidacionDiscount = numConvalidadas * fees.precioAsignatura;
-    subtotalAcad = Math.max(0, subtotalAcad - convalidacionDiscount);
-
-    // Matrícula de Honor: descuenta 58€ (apilable solo con fam_num_general, se aplica antes del multiplicador)
-    if (formData.matriculaHonor) {
-      subtotalAcad = Math.max(0, subtotalAcad - 58);
-    }
-
-    let multiplier = 1;
-    if (formData.tipoReduccion === 'fam_num_general') multiplier = 0.5;
-    else if (formData.tipoReduccion && formData.tipoReduccion !== 'ninguna') multiplier = 0;
-
-    if (formData.formaPago === 'beca') {
-      multiplier = 0;
-    }
-
-    const totalAdmin = subtotalAdmin * multiplier;
-    const totalAcad = subtotalAcad * multiplier;
-    const total = totalAdmin + totalAcad;
-
-    return {
-      admin: totalAdmin,
-      acad: totalAcad,
-      total: total,
-      firstPayment: totalAdmin + (totalAcad / 2),
-      secondPayment: totalAcad / 2,
-      details: {
-        serviciosGenerales: fees.serviciosGenerales * multiplier,
-        aperturaExpediente: formData.esPrimerAno ? fees.aperturaExpediente * multiplier : 0,
-        curso: cursoBase * multiplier,
-        asignaturasPendientes: (pending1Cost + pending2Cost) * multiplier,
-        convalidacionDiscount: convalidacionDiscount * multiplier,
-        convalidacionCount: numConvalidadas,
-        matriculaHonorDiscount: formData.matriculaHonor ? 58 : 0,
-        multiplier,
-        reductionLabel: (() => {
-          const base = formData.tipoReduccion === 'fam_num_general' ? 'Familia Numerosa General (50%)' :
-                       formData.tipoReduccion === 'fam_num_especial' ? 'Familia Numerosa Especial (100%)' :
-                       formData.tipoReduccion === 'discapacidad' ? 'Discapacidad ≥ 33% (100%)' :
-                       formData.tipoReduccion === 'terrorismo' ? 'Víctima de Terrorismo (100%)' :
-                       formData.tipoReduccion === 'violencia_genero' ? 'Víctima de Violencia de Género (100%)' :
-                       formData.tipoReduccion === 'ingreso_minimo' ? 'Ingreso Mínimo de Solidaridad (100%)' : '';
-          if (formData.matriculaHonor) {
-            return base ? `${base} + Matrícula de Honor` : 'Matrícula de Honor (1 asignatura)';
-          }
-          return base;
-        })()
-      }
-    };
-  }, [formData.tipoEnsenanza, formData.curso, formData.esPrimerAno, formData.tipoReduccion, formData.matriculaHonor, formData.formaPago, formData.asignaturaPendiente1, formData.asignaturaPendiente2, formData.convalidacionSolicitada, formData.convalidacionAsignaturas]);
-
-  React.useEffect(() => {
-    if (calculation) {
-      setFormData(prev => ({
-        ...prev,
-        importeTotal: calculation.total.toFixed(2),
-        importe1erPago: calculation.firstPayment.toFixed(2),
-        importe2oPago: calculation.secondPayment.toFixed(2),
-      }));
-    }
-  }, [calculation]);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error' | 'duplicate'>('idle');
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -282,18 +200,160 @@ export default function App() {
     })).sort((a, b) => a.label.localeCompare(b.label));
   }, [formData.especialidad, formData.curso, formData.tipoEnsenanza, materiasIndex]);
 
+  const asignaturasParaRepetidor = useMemo(() => {
+    if (!formData.especialidad || !formData.tipoEnsenanza || !materiasIndex) return [];
+    // cursoNum+1 para incluir también el último curso (4º elemental → 5, 6º profesional → 7)
+    const maxCursoNum = formData.tipoEnsenanza === 'elemental' ? 5 : 7;
+    const all = queryMateriasPrevias(materiasIndex, formData.especialidad, maxCursoNum, formData.tipoEnsenanza as 'elemental' | 'profesional');
+    return all.map(m => ({
+      id: m.MATERIA,
+      label: `${m.DESCRIPCION} (${m.CURSO_N})`,
+      materiaId: m.MATERIA,
+    })).sort((a, b) => a.label.localeCompare(b.label, 'es'));
+  }, [formData.especialidad, formData.tipoEnsenanza, materiasIndex]);
+
+  const is5o6Profesional =
+    (formData.curso.includes('5') || formData.curso.includes('6')) &&
+    formData.tipoEnsenanza === 'profesional';
+
+  const isRepetidorAllowed =
+    (formData.tipoEnsenanza === 'elemental' && formData.curso === '4º') ||
+    (formData.tipoEnsenanza === 'profesional' && formData.curso === '6º');
+
+  const isRepetidor = !!formData.esRepetidor && isRepetidorAllowed;
+
   const selectedPendingSubjects = useMemo(() => {
+    const pool = isRepetidor ? asignaturasParaRepetidor : asignaturasPrevias;
     const selected = [];
     if (formData.asignaturaPendiente1) {
-      const found = asignaturasPrevias.find(a => a.id === formData.asignaturaPendiente1);
+      const found = pool.find(a => a.id === formData.asignaturaPendiente1);
       if (found) selected.push(found);
     }
     if (formData.asignaturaPendiente2) {
-      const found = asignaturasPrevias.find(a => a.id === formData.asignaturaPendiente2);
+      const found = pool.find(a => a.id === formData.asignaturaPendiente2);
       if (found) selected.push(found);
     }
     return selected;
-  }, [formData.asignaturaPendiente1, formData.asignaturaPendiente2, asignaturasPrevias]);
+  }, [formData.asignaturaPendiente1, formData.asignaturaPendiente2, asignaturasPrevias, asignaturasParaRepetidor, isRepetidor]);
+
+  // true solo cuando el repetidor tiene pendientes EXCLUSIVAMENTE del último curso (EE4/EP6)
+  // Usa el lookup sin filtrar por perfil para no excluir asignaturas de perfil de 6º
+  const allPendingFromLastCourse = useMemo(() => {
+    if (!isRepetidor || selectedPendingSubjects.length === 0 || !materiasIndex) return false;
+    const rawLastCourse = queryMateriasCurso(materiasIndex, formData.especialidad, formData.curso, formData.tipoEnsenanza as 'elemental' | 'profesional');
+    const lastCourseIds = new Set(rawLastCourse.map(m => m.MATERIA));
+    return selectedPendingSubjects.every(s => lastCourseIds.has(s.id));
+  }, [isRepetidor, selectedPendingSubjects, materiasIndex, formData.especialidad, formData.curso, formData.tipoEnsenanza]);
+
+  const calculation = useMemo(() => {
+    if (!formData.tipoEnsenanza || !formData.curso) return null;
+
+    const fees = FEES[formData.tipoEnsenanza as 'elemental' | 'profesional'];
+    let cursoBase = (fees.cursos as any)[formData.curso] || 0;
+
+    const isRepetidorEfectivo = !!formData.esRepetidor;
+    const repMultiplier = isRepetidorEfectivo ? 1.2 : 1;
+
+    let subtotalAdmin = fees.serviciosGenerales * repMultiplier;
+    if (formData.esPrimerAno) subtotalAdmin += fees.aperturaExpediente * repMultiplier;
+
+    let subtotalAcad: number;
+    let pending1Cost = 0;
+    let pending2Cost = 0;
+    let repetidorMode: 'suelta' | 'completo' | null = null;
+
+    if (isRepetidorEfectivo) {
+      const hasPending1 = !!formData.asignaturaPendiente1;
+      const hasPending2 = !!formData.asignaturaPendiente2;
+      const pendingCount = (hasPending1 ? 1 : 0) + (hasPending2 ? 1 : 0);
+      const maxSuelta = formData.tipoEnsenanza === 'elemental' ? 1 : 2;
+
+      if (pendingCount > 0 && pendingCount <= maxSuelta && allPendingFromLastCourse) {
+        // Asignaturas sueltas del último curso: solo esas asignaturas + 20%
+        pending1Cost = hasPending1 ? fees.precioAsignatura * 1.2 : 0;
+        pending2Cost = hasPending2 ? fees.precioAsignatura * 1.2 : 0;
+        subtotalAcad = pending1Cost + pending2Cost;
+        repetidorMode = 'suelta';
+      } else {
+        // Curso completo + 20%, más pendientes de cursos anteriores si las hay
+        pending1Cost = hasPending1 ? fees.precioAsignatura * 1.2 : 0;
+        pending2Cost = hasPending2 ? fees.precioAsignatura * 1.2 : 0;
+        subtotalAcad = cursoBase * 1.2 + pending1Cost + pending2Cost;
+        repetidorMode = 'completo';
+      }
+    } else {
+      // Cálculo normal (asignaturas pendientes de cursos anteriores con recargo 20%)
+      pending1Cost = formData.asignaturaPendiente1 ? fees.precioAsignatura * 1.2 : 0;
+      pending2Cost = formData.asignaturaPendiente2 ? fees.precioAsignatura * 1.2 : 0;
+      subtotalAcad = cursoBase + pending1Cost + pending2Cost;
+    }
+
+    // Convalidación: descuenta precioAsignatura por cada asignatura convalidada
+    const numConvalidadas = formData.convalidacionSolicitada
+      ? (formData.convalidacionAsignaturas ?? []).length
+      : 0;
+    const convalidacionDiscount = numConvalidadas * fees.precioAsignatura;
+    subtotalAcad = Math.max(0, subtotalAcad - convalidacionDiscount);
+
+    // Matrícula de Honor: descuenta 58€ (apilable solo con fam_num_general, se aplica antes del multiplicador)
+    if (formData.matriculaHonor) {
+      subtotalAcad = Math.max(0, subtotalAcad - 58);
+    }
+
+    let multiplier = 1;
+    if (formData.tipoReduccion === 'fam_num_general') multiplier = 0.5;
+    else if (formData.tipoReduccion && formData.tipoReduccion !== 'ninguna') multiplier = 0;
+
+    if (formData.formaPago === 'beca') {
+      multiplier = 0;
+    }
+
+    const totalAdmin = subtotalAdmin * multiplier;
+    const totalAcad = subtotalAcad * multiplier;
+    const total = totalAdmin + totalAcad;
+
+    return {
+      admin: totalAdmin,
+      acad: totalAcad,
+      total: total,
+      firstPayment: totalAdmin + (totalAcad / 2),
+      secondPayment: totalAcad / 2,
+      details: {
+        serviciosGenerales: fees.serviciosGenerales * repMultiplier * multiplier,
+        aperturaExpediente: formData.esPrimerAno ? fees.aperturaExpediente * repMultiplier * multiplier : 0,
+        curso: repetidorMode === 'completo' ? cursoBase * 1.2 * multiplier : cursoBase * multiplier,
+        asignaturasPendientes: (pending1Cost + pending2Cost) * multiplier,
+        convalidacionDiscount: convalidacionDiscount * multiplier,
+        convalidacionCount: numConvalidadas,
+        matriculaHonorDiscount: formData.matriculaHonor ? 58 : 0,
+        multiplier,
+        repetidorMode,
+        reductionLabel: (() => {
+          const base = formData.tipoReduccion === 'fam_num_general' ? 'Familia Numerosa General (50%)' :
+                       formData.tipoReduccion === 'fam_num_especial' ? 'Familia Numerosa Especial (100%)' :
+                       formData.tipoReduccion === 'discapacidad' ? 'Discapacidad ≥ 33% (100%)' :
+                       formData.tipoReduccion === 'terrorismo' ? 'Víctima de Terrorismo (100%)' :
+                       formData.tipoReduccion === 'violencia_genero' ? 'Víctima de Violencia de Género (100%)' :
+                       formData.tipoReduccion === 'ingreso_minimo' ? 'Ingreso Mínimo de Solidaridad (100%)' : '';
+          if (formData.matriculaHonor) {
+            return base ? `${base} + Matrícula de Honor` : 'Matrícula de Honor (1 asignatura)';
+          }
+          return base;
+        })()
+      }
+    };
+  }, [formData.tipoEnsenanza, formData.curso, formData.esPrimerAno, formData.tipoReduccion, formData.matriculaHonor, formData.formaPago, formData.asignaturaPendiente1, formData.asignaturaPendiente2, formData.convalidacionSolicitada, formData.convalidacionAsignaturas, formData.esRepetidor, allPendingFromLastCourse]);
+
+  React.useEffect(() => {
+    if (calculation) {
+      setFormData(prev => ({
+        ...prev,
+        importeTotal: calculation.total.toFixed(2),
+        importe1erPago: calculation.firstPayment.toFixed(2),
+        importe2oPago: calculation.secondPayment.toFixed(2),
+      }));
+    }
+  }, [calculation]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -326,6 +386,7 @@ export default function App() {
         newData.perfilProfesional = '';
         newData.asignaturaPendiente1 = '';
         newData.asignaturaPendiente2 = '';
+        newData.esRepetidor = false;
         newData.convalidacionAsignaturas = [];
         newData.convalidacionSolicitada = false;
         newData.convalidacionMotivo = '';
@@ -340,9 +401,14 @@ export default function App() {
         newData.perfilProfesional = '';
         newData.asignaturaPendiente1 = '';
         newData.asignaturaPendiente2 = '';
+        newData.esRepetidor = false;
         newData.convalidacionAsignaturas = [];
         newData.convalidacionSolicitada = false;
         newData.convalidacionMotivo = '';
+      }
+      if (name === 'esRepetidor') {
+        newData.asignaturaPendiente1 = '';
+        newData.asignaturaPendiente2 = '';
       }
 
       return newData;
@@ -499,6 +565,7 @@ export default function App() {
         selectedPendingSubjects={selectedPendingSubjects}
         calculation={calculation}
         requestNumber={reqNum ?? undefined}
+        allPendingFromLastCourse={allPendingFromLastCourse}
       />
     ).toBlob();
 
@@ -630,7 +697,7 @@ export default function App() {
           ...selectedPendingSubjects.map(s => ({
             codigo: s.id,
             nombre: s.label,
-            tipo: 'Pendiente'
+            tipo: isRepetidor ? 'Repetidor' : 'Pendiente'
           }))
         ];
 
@@ -658,6 +725,7 @@ export default function App() {
           especialidad: formData.especialidad,
           asignaturaPendiente1: formData.asignaturaPendiente1,
           asignaturaPendiente2: formData.asignaturaPendiente2 ?? '',
+          esRepetidor: !!formData.esRepetidor,
           perfilProfesional: formData.perfilProfesional,
           formaPago: formData.formaPago,
           familiaNumerosa: formData.familiaNumerosa,
@@ -1124,23 +1192,78 @@ export default function App() {
                     ))}
                   </select>
                 </div>
+                <div className="md:col-span-2">
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-bold uppercase tracking-wider text-gray-600">
+                      Repetidor
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!!formData.esRepetidor}
+                      onClick={() => {
+                        const syntheticEvent = {
+                          target: { name: 'esRepetidor', value: '', type: 'checkbox', checked: !formData.esRepetidor },
+                        } as React.ChangeEvent<HTMLInputElement>;
+                        handleChange(syntheticEvent);
+                      }}
+                      className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 ${formData.esRepetidor ? 'bg-gray-900' : 'bg-gray-200'}`}
+                    >
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${formData.esRepetidor ? 'translate-x-8' : 'translate-x-1'}`} />
+                    </button>
+                    <span className={`text-xs font-bold uppercase tracking-wider ${formData.esRepetidor ? 'text-gray-900' : 'text-gray-400'}`}>
+                      {formData.esRepetidor ? 'Sí' : 'No'}
+                    </span>
+                  </div>
+                  {formData.esRepetidor && isRepetidorAllowed && (
+                    <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 space-y-1">
+                      {formData.tipoEnsenanza === 'elemental' ? (
+                        <>
+                          <span className="block"><strong>EE4 repetidor:</strong> si tiene 1 asignatura pendiente del ciclo, pagará solo esa asignatura suelta con recargo +20% (56,40 €). Sin asignatura pendiente, abonará el curso completo con recargo +20% (225,60 €).</span>
+                          <span className="block">Si repite con asignatura suelta, indíquela en el campo <em>Asignatura pendiente del curso repetido</em>.</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="block"><strong>EP6 repetidor:</strong> si tiene 1 ó 2 asignaturas pendientes del ciclo, pagará solo esas asignaturas sueltas con recargo +20% (69,60 € c/u). Sin asignaturas pendientes, abonará el curso completo con recargo +20% (417,60 €).</span>
+                          <span className="block">Si repite con asignaturas sueltas, indíquelas en los campos <em>Asignatura pendiente del curso repetido</em>.</span>
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
+
                 <div className="md:col-span-2 space-y-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Asignatura pendiente 1</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">
+                    {isRepetidor ? 'Asignatura pendiente del curso repetido' : 'Asignatura pendiente 1'}
+                  </label>
                     <select name="asignaturaPendiente1" value={formData.asignaturaPendiente1} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
                       <option value="">Ninguna...</option>
-                      {asignaturasPrevias.map(a => (
+                      {(isRepetidor ? asignaturasParaRepetidor : asignaturasPrevias).map(a => (
                         <option key={a.id} value={a.id}>
                           {a.materiaId} - {a.label}
                         </option>
                       ))}
                     </select>
                   </div>
-                  {formData.tipoEnsenanza === 'profesional' && (
+                  {(formData.tipoEnsenanza === 'profesional' && !isRepetidor) && (
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Asignatura pendiente 2</label>
                       <select name="asignaturaPendiente2" value={formData.asignaturaPendiente2} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
                         <option value="">Ninguna...</option>
                         {asignaturasPrevias.map(a => (
+                          <option key={a.id} value={a.id}>
+                            {a.materiaId} - {a.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {(isRepetidor && formData.tipoEnsenanza === 'profesional') && (
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">2ª Asignatura pendiente del curso repetido</label>
+                      <select name="asignaturaPendiente2" value={formData.asignaturaPendiente2} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
+                        <option value="">Ninguna...</option>
+                        {asignaturasParaRepetidor.map(a => (
                           <option key={a.id} value={a.id}>
                             {a.materiaId} - {a.label}
                           </option>
@@ -1169,10 +1292,14 @@ export default function App() {
                                 const convAsigs = formData.convalidacionAsignaturas ?? [];
                                 type SubjectRow = { group: number; key: string; code: string; name: string; tipo: 'matriculada' | 'perfil' | 'pendiente' | 'convalidada' };
                                 const rows: SubjectRow[] = [];
-                                for (const m of asignaturasCursoActual) {
-                                  const isConvalidada = convAsigs.includes(m.MATERIA);
-                                  const isPerfil = !isConvalidada && PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
-                                  rows.push({ group: isConvalidada ? 4 : isPerfil ? 2 : 1, key: m.MATERIA, code: m.MATERIA, name: m.DESCRIPCION, tipo: isConvalidada ? 'convalidada' : isPerfil ? 'perfil' : 'matriculada' });
+                                // Repetidor con asignaturas sueltas del último curso: solo muestra esas pendientes
+                                const repetidorSuelta = allPendingFromLastCourse;
+                                if (!repetidorSuelta) {
+                                  for (const m of asignaturasCursoActual) {
+                                    const isConvalidada = convAsigs.includes(m.MATERIA);
+                                    const isPerfil = !isConvalidada && is5o6Profesional && PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
+                                    rows.push({ group: isConvalidada ? 4 : isPerfil ? 2 : 1, key: m.MATERIA, code: m.MATERIA, name: m.DESCRIPCION, tipo: isConvalidada ? 'convalidada' : isPerfil ? 'perfil' : 'matriculada' });
+                                  }
                                 }
                                 for (const m of selectedPendingSubjects) {
                                   rows.push({ group: 3, key: `pending-${m.id}`, code: m.materiaId, name: m.label, tipo: 'pendiente' });
@@ -1181,7 +1308,7 @@ export default function App() {
                                 const STYLES = {
                                   matriculada: { bg: 'bg-white border-blue-100',      code: 'text-blue-500 bg-blue-50',      badge: 'text-blue-500 bg-blue-50 border-blue-100',        label: 'Matriculada' },
                                   perfil:      { bg: 'bg-purple-50 border-purple-100', code: 'text-purple-500 bg-purple-100', badge: 'text-purple-500 bg-purple-100 border-purple-200', label: `Perfil ${formData.perfilProfesional}` },
-                                  pendiente:   { bg: 'bg-orange-50 border-orange-100', code: 'text-orange-500 bg-orange-100', badge: 'text-orange-500 bg-orange-100 border-orange-200', label: 'Pendiente' },
+                                  pendiente:   { bg: 'bg-orange-50 border-orange-100', code: 'text-orange-500 bg-orange-100', badge: 'text-orange-500 bg-orange-100 border-orange-200', label: isRepetidor ? 'Repetidor' : 'Pendiente' },
                                   convalidada: { bg: 'bg-green-50 border-green-200',   code: 'text-green-700 bg-green-100',   badge: 'text-green-700 bg-green-100 border-green-200',    label: 'Solicitada convalidación' },
                                 };
                                 return rows.flatMap((item, idx) => {
@@ -1680,6 +1807,15 @@ export default function App() {
               </div>
             </div>
 
+            {formData.esRepetidor && formData.esPrimerAno && (
+              <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl mb-2">
+                <AlertCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
+                <p className="text-sm text-red-700 font-medium leading-relaxed">
+                  <span className="font-bold">Incongruencia detectada:</span> Un alumno repetidor no puede ser primer año en el centro al mismo tiempo. Revisa los campos <span className="font-bold">Repetidor</span> y <span className="font-bold">Primer año</span> antes de continuar.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[
                 { id: 'unico', label: 'Opción 1', title: 'Pago Único', desc: 'Total a ingresar en un solo pago' },
@@ -1721,39 +1857,65 @@ export default function App() {
                   <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
                     <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Desglose de Tasas</h3>
                     <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Servicios Generales</span>
-                        <span className="font-medium">{calculation.details.serviciosGenerales.toFixed(2)}€</span>
-                      </div>
-                      {formData.esPrimerAno && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Apertura de Expediente</span>
-                          <span className="font-medium">{calculation.details.aperturaExpediente.toFixed(2)}€</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Matrícula Curso ({formData.curso})</span>
-                        <span className="font-medium">{calculation.details.curso.toFixed(2)}€</span>
-                      </div>
-                      {calculation.details.asignaturasPendientes > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-500">Asignaturas Pendientes</span>
-                          <span className="font-medium">{calculation.details.asignaturasPendientes.toFixed(2)}€</span>
-                        </div>
-                      )}
-                      {calculation.details.convalidacionDiscount > 0 && renderConvalidacionRow(calculation.details.convalidacionCount, calculation.details.convalidacionDiscount)}
-                      {calculation.details.matriculaHonorDiscount > 0 && (
-                        <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
-                          <span>Matrícula de Honor (Art. 13)</span>
-                          <span>-{calculation.details.matriculaHonorDiscount.toFixed(2)}€</span>
-                        </div>
-                      )}
-                      {calculation.details.multiplier < 1 && (
-                        <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
-                          <span>Reducción aplicada</span>
-                          <span>-{((1 - calculation.details.multiplier) * 100).toFixed(0)}%</span>
-                        </div>
-                      )}
+                      {(() => {
+                        const d = calculation.details;
+                        const rep = !!d.repetidorMode;
+                        const badge = rep ? <span className="ml-1.5 text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1 py-0.5">(+20%)</span> : null;
+                        const totalConceptos =
+                          d.serviciosGenerales +
+                          d.aperturaExpediente +
+                          (d.repetidorMode !== 'suelta' ? d.curso : 0) +
+                          d.asignaturasPendientes -
+                          d.convalidacionDiscount -
+                          d.matriculaHonorDiscount;
+                        return (
+                          <>
+                            <div className="flex justify-between text-sm items-center">
+                              <span className="text-gray-500 flex items-center">Servicios Generales{badge}</span>
+                              <span className="font-medium">{d.serviciosGenerales.toFixed(2)}€</span>
+                            </div>
+                            {formData.esPrimerAno && (
+                              <div className="flex justify-between text-sm items-center">
+                                <span className="text-gray-500 flex items-center">Apertura de Expediente{badge}</span>
+                                <span className="font-medium">{d.aperturaExpediente.toFixed(2)}€</span>
+                              </div>
+                            )}
+                            {d.repetidorMode !== 'suelta' && (
+                              <div className="flex justify-between text-sm items-center">
+                                <span className="text-gray-500 flex items-center">
+                                  Matrícula Curso ({formData.curso}){d.repetidorMode === 'completo' ? badge : null}
+                                </span>
+                                <span className="font-medium">{d.curso.toFixed(2)}€</span>
+                              </div>
+                            )}
+                            {d.asignaturasPendientes > 0 && (
+                              <div className="flex justify-between text-sm items-center">
+                                <span className="text-gray-500 flex items-center">
+                                  Asignaturas Pendientes{d.repetidorMode === 'suelta' ? badge : null}
+                                </span>
+                                <span className="font-medium">{d.asignaturasPendientes.toFixed(2)}€</span>
+                              </div>
+                            )}
+                            {d.convalidacionDiscount > 0 && renderConvalidacionRow(d.convalidacionCount, d.convalidacionDiscount)}
+                            {d.matriculaHonorDiscount > 0 && (
+                              <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
+                                <span>Matrícula de Honor (Art. 13)</span>
+                                <span>-{d.matriculaHonorDiscount.toFixed(2)}€</span>
+                              </div>
+                            )}
+                            {d.multiplier < 1 && (
+                              <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
+                                <span>Reducción aplicada</span>
+                                <span>-{((1 - d.multiplier) * 100).toFixed(0)}%</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-sm pt-3 mt-1 border-t-2 border-gray-200 font-bold">
+                              <span className="text-gray-700">Total Tasas</span>
+                              <span className="text-gray-900">{totalConceptos.toFixed(2)}€</span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </motion.div>
