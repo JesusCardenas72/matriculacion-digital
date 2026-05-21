@@ -478,13 +478,18 @@ export const TutorialPdf = () => (
               Las asignaturas pendientes tienen un recargo del 20% sobre el precio base de la asignatura.
             </Text>
           </InfoBox>
+          <InfoBox type="info">
+            <Text style={[styles.textSmall, { color: colors.info }]}>
+              Alumnado de 4º de Elemental o 6º de Profesional que repita curso: active el interruptor <Text style={{ fontWeight: 'bold' }}>"Repetidor"</Text> para aplicar las reglas y recargos específicos. Ver sección siguiente.
+            </Text>
+          </InfoBox>
         </View>
       </View>
       <PageFooter />
     </Page>
 
     {/* ═══════════════════════════════════════════════════════════ */}
-    {/* PAGE 4: Perfiles 5º/6º + Convalidaciones                   */}
+    {/* PAGE 4: Matrícula como Repetidor                           */}
     {/* ═══════════════════════════════════════════════════════════ */}
     <Page size="A4" style={styles.page}>
       <PageHeader />
@@ -492,6 +497,78 @@ export const TutorialPdf = () => (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>8</Text></View>
+            <Text style={styles.sectionTitle}>Matrícula como Repetidor (EE4 / EP6)</Text>
+          </View>
+
+          <InfoBox type="warning">
+            <Text style={[styles.textSmall, { color: '#dd6b20', fontWeight: 'bold' }]}>
+              Solo disponible para: 4º de Enseñanza Elemental (EE4) y 6º de Enseñanza Profesional (EP6).
+            </Text>
+            <Text style={[styles.textSmall, { marginTop: 3 }]}>
+              El interruptor "Repetidor" aparece siempre en la sección de Datos de Matriculación, pero solo tiene efecto en estos dos cursos.
+            </Text>
+          </InfoBox>
+
+          <Text style={[styles.textBold, { marginTop: 8, marginBottom: 4 }]}>Cómo funciona:</Text>
+          <View style={styles.list}>
+            <BulletItem>Active el interruptor <Text style={{ fontWeight: 'bold' }}>Repetidor → Sí</Text> en la sección de Datos de Matriculación.</BulletItem>
+            <BulletItem>Los campos de asignatura pendiente mostrarán <Text style={{ fontWeight: 'bold' }}>todas las asignaturas del ciclo completo</Text> (1º–4º en EE, 1º–6º en EP), no solo las de cursos anteriores.</BulletItem>
+            <BulletItem accent>Se aplica un <Text style={{ fontWeight: 'bold' }}>recargo del +20%</Text> sobre todos los conceptos de tasas (servicios generales, apertura de expediente, matrícula y asignaturas pendientes).</BulletItem>
+          </View>
+
+          <Text style={[styles.textBold, { marginTop: 10, marginBottom: 6 }]}>Dos modalidades de matrícula:</Text>
+          <View style={styles.table}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderText, { flex: 0.35 }]}>Modalidad</Text>
+              <Text style={styles.tableHeaderText}>Condición</Text>
+              <Text style={[styles.tableHeaderText, { flex: 0.55 }]}>Qué se paga</Text>
+            </View>
+            <TableRow cells={[
+              { text: 'Suelta' },
+              { text: 'EE4: 1 asig. pendiente del propio 4º · EP6: 1–2 asig. pendientes del propio 6º' },
+              { text: 'Solo esas asignaturas con +20% (sin matrícula de curso)' },
+            ]} />
+            <TableRow cells={[
+              { text: 'Completo' },
+              { text: 'Sin asignaturas pendientes del último curso, o con pendientes de cursos anteriores' },
+              { text: 'Curso completo +20% (más asignaturas pendientes de otros cursos si las hay)' },
+            ]} alt />
+          </View>
+
+          <Text style={[styles.textBold, { marginTop: 10, marginBottom: 6 }]}>Importes con recargo (+20%):</Text>
+          <View style={styles.table}>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.tableHeaderText, { flex: 0.4 }]}>Curso / Concepto</Text>
+              <Text style={[styles.tableHeaderText, { flex: 0.3 }]}>Modalidad</Text>
+              <Text style={[styles.tableHeaderText, { flex: 0.3 }]}>Importe</Text>
+            </View>
+            <TableRow cells={[{ text: 'EE4 — Asig. suelta' }, { text: 'Suelta' }, { text: '56,40 € / asig.' }]} />
+            <TableRow cells={[{ text: 'EE4 — Curso completo' }, { text: 'Completo' }, { text: '225,60 €' }]} alt />
+            <TableRow cells={[{ text: 'EP6 — Asig. suelta' }, { text: 'Suelta' }, { text: '69,60 € / asig.' }]} />
+            <TableRow cells={[{ text: 'EP6 — Curso completo' }, { text: 'Completo' }, { text: '417,60 €' }]} alt />
+            <TableRow cells={[{ text: 'Servicios Generales (+20%)' }, { text: 'Ambas' }, { text: '12,00 €' }]} />
+            <TableRow cells={[{ text: 'Apertura Expediente (+20%, si aplica)' }, { text: 'Ambas' }, { text: '30,00 €' }]} alt />
+          </View>
+
+          <InfoBox type="alert">
+            <Text style={[styles.textSmall, { color: colors.accent }]}>
+              Para la modalidad <Text style={{ fontWeight: 'bold' }}>suelta</Text>, las asignaturas pendientes indicadas deben pertenecer al propio curso que se repite (4º EE ó 6º EP). Si se añade una asignatura de un curso anterior, el sistema pasará automáticamente a modalidad <Text style={{ fontWeight: 'bold' }}>completo</Text>.
+            </Text>
+          </InfoBox>
+        </View>
+      </View>
+      <PageFooter />
+    </Page>
+
+    {/* ═══════════════════════════════════════════════════════════ */}
+    {/* PAGE 5: Perfiles 5º/6º + Convalidaciones                   */}
+    {/* ═══════════════════════════════════════════════════════════ */}
+    <Page size="A4" style={styles.page}>
+      <PageHeader />
+      <View style={styles.content}>
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>9</Text></View>
             <Text style={styles.sectionTitle}>Perfiles Profesionales (5º y 6º de Profesional)</Text>
           </View>
           <Text style={styles.text}>
@@ -510,7 +587,7 @@ export const TutorialPdf = () => (
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>9</Text></View>
+            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>10</Text></View>
             <Text style={styles.sectionTitle}>Convalidación de Asignaturas</Text>
           </View>
           <Text style={styles.text}>
@@ -549,14 +626,14 @@ export const TutorialPdf = () => (
     </Page>
 
     {/* ═══════════════════════════════════════════════════════════ */}
-    {/* PAGE 5: Sección 4 - Forma de Pago (Tasas)                  */}
+    {/* PAGE 6: Sección 4 - Forma de Pago (Tasas)                  */}
     {/* ═══════════════════════════════════════════════════════════ */}
     <Page size="A4" style={styles.page}>
       <PageHeader />
       <View style={styles.content}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>10</Text></View>
+            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>11</Text></View>
             <Text style={styles.sectionTitle}>Sección 4: Forma de Pago</Text>
           </View>
 
@@ -583,6 +660,13 @@ export const TutorialPdf = () => (
             <TableRow cells={[{ text: 'Profesional' }, { text: '1º y 2º' }, { text: '232 €' }]} />
             <TableRow cells={[{ text: 'Profesional' }, { text: '3º a 6º' }, { text: '348 €' }]} alt />
           </View>
+
+          <InfoBox type="alert">
+            <Text style={[styles.textSmall, { color: colors.accent, fontWeight: 'bold' }]}>Recargo por Repetidor (+20%):</Text>
+            <Text style={[styles.textSmall, { marginTop: 2 }]}>
+              El alumnado de 4º EE ó 6º EP que repita curso verá todos los conceptos anteriores incrementados un 20% (servicios generales: 12 €, apertura de expediente: 30 €). Las tasas de matrícula y de asignaturas sueltas también llevan el +20%. Ver sección 8 para el detalle completo.
+            </Text>
+          </InfoBox>
 
           <Text style={[styles.textBold, { marginTop: 10, marginBottom: 6 }]}>Precio por Asignatura:</Text>
           <View style={styles.table}>
@@ -616,14 +700,14 @@ export const TutorialPdf = () => (
     </Page>
 
     {/* ═══════════════════════════════════════════════════════════ */}
-    {/* PAGE 6: Reducciones y Exenciones                           */}
+    {/* PAGE 7: Reducciones y Exenciones                           */}
     {/* ═══════════════════════════════════════════════════════════ */}
     <Page size="A4" style={styles.page}>
       <PageHeader />
       <View style={styles.content}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>11</Text></View>
+            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>12</Text></View>
             <Text style={styles.sectionTitle}>Reducciones y Exenciones de Tasas</Text>
           </View>
           <View style={styles.table}>
@@ -654,7 +738,7 @@ export const TutorialPdf = () => (
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>12</Text></View>
+            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>13</Text></View>
             <Text style={styles.sectionTitle}>Apertura de Expediente (Art. 12)</Text>
           </View>
           <Text style={styles.text}>
@@ -671,14 +755,14 @@ export const TutorialPdf = () => (
     </Page>
 
     {/* ═══════════════════════════════════════════════════════════ */}
-    {/* PAGE 7: Modelo 046 + Información Legal                     */}
+    {/* PAGE 8: Modelo 046 + Información Legal                     */}
     {/* ═══════════════════════════════════════════════════════════ */}
     <Page size="A4" style={styles.page}>
       <PageHeader />
       <View style={styles.content}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>13</Text></View>
+            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>14</Text></View>
             <Text style={styles.sectionTitle}>Modelo 046 — Pago de Tasas</Text>
           </View>
           <Text style={styles.text}>
@@ -712,7 +796,7 @@ export const TutorialPdf = () => (
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>14</Text></View>
+            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>15</Text></View>
             <Text style={styles.sectionTitle}>Información Legal y Autorizaciones</Text>
           </View>
           <Text style={[styles.textBold, { marginBottom: 4 }]}>Autorización para publicación de imágenes:</Text>
@@ -729,14 +813,14 @@ export const TutorialPdf = () => (
     </Page>
 
     {/* ═══════════════════════════════════════════════════════════ */}
-    {/* PAGE 8: Documentos Adjuntos + Envío                        */}
+    {/* PAGE 9: Documentos Adjuntos + Envío                        */}
     {/* ═══════════════════════════════════════════════════════════ */}
     <Page size="A4" style={styles.page}>
       <PageHeader />
       <View style={styles.content}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>15</Text></View>
+            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>16</Text></View>
             <Text style={styles.sectionTitle}>Documentos Adjuntos</Text>
           </View>
           <Text style={styles.text}>
@@ -760,7 +844,7 @@ export const TutorialPdf = () => (
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>16</Text></View>
+            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>17</Text></View>
             <Text style={styles.sectionTitle}>Envío del Formulario</Text>
           </View>
           <Text style={[styles.textBold, { marginBottom: 6 }]}>Proceso de Envío:</Text>
@@ -794,14 +878,14 @@ export const TutorialPdf = () => (
     </Page>
 
     {/* ═══════════════════════════════════════════════════════════ */}
-    {/* PAGE 9: Contacto y Recomendaciones                         */}
+    {/* PAGE 10: Contacto y Recomendaciones                        */}
     {/* ═══════════════════════════════════════════════════════════ */}
     <Page size="A4" style={styles.page}>
       <PageHeader />
       <View style={styles.content}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>17</Text></View>
+            <View style={styles.sectionNumber}><Text style={{ color: colors.white, fontSize: 11 }}>18</Text></View>
             <Text style={styles.sectionTitle}>Contacto y Recomendaciones</Text>
           </View>
           <View style={styles.infoBox}>
