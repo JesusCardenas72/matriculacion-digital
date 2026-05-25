@@ -1,7 +1,7 @@
 import express from 'express';
 import { readdirSync } from 'fs';
 import { join, extname, basename } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const API_DIR = join(__dirname, '..', 'api');
@@ -13,7 +13,7 @@ async function mountApis() {
   const files = readdirSync(API_DIR).filter(f => extname(f) === '.ts');
   for (const file of files) {
     const route = '/api/' + basename(file, extname(file));
-    const mod = await import(join(API_DIR, file));
+    const mod = await import(pathToFileURL(join(API_DIR, file)).href);
     const handler = mod.default;
     if (typeof handler === 'function') {
       app.all(route, (req, res) => handler(req, res));
