@@ -1193,28 +1193,24 @@ export default function App() {
                   </select>
                 </div>
                 <div className="md:col-span-2">
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm font-bold uppercase tracking-wider text-gray-600">
+                  <label className="toggle-label">
+                    <div className="toggle">
+                      <input
+                        className="toggle-state"
+                        type="checkbox"
+                        name="esRepetidor"
+                        checked={!!formData.esRepetidor}
+                        onChange={handleChange}
+                      />
+                      <div className="indicator" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-700">
                       Repetidor
                     </span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={!!formData.esRepetidor}
-                      onClick={() => {
-                        const syntheticEvent = {
-                          target: { name: 'esRepetidor', value: '', type: 'checkbox', checked: !formData.esRepetidor },
-                        } as React.ChangeEvent<HTMLInputElement>;
-                        handleChange(syntheticEvent);
-                      }}
-                      className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 ${formData.esRepetidor ? 'bg-gray-900' : 'bg-gray-200'}`}
-                    >
-                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${formData.esRepetidor ? 'translate-x-8' : 'translate-x-1'}`} />
-                    </button>
-                    <span className={`text-xs font-bold uppercase tracking-wider ${formData.esRepetidor ? 'text-gray-900' : 'text-gray-400'}`}>
-                      {formData.esRepetidor ? 'Sí' : 'No'}
-                    </span>
-                  </div>
+                    {formData.esRepetidor && (
+                      <span className="text-sm font-bold text-red-600">Sí</span>
+                    )}
+                  </label>
                   {formData.esRepetidor && isRepetidorAllowed && (
                     <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 space-y-1">
                       {formData.tipoEnsenanza === 'elemental' ? (
