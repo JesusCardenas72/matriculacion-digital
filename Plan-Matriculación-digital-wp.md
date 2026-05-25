@@ -114,7 +114,7 @@ const POWER_AUTOMATE_URL_PDF = '/api/upload-pdf';
 Una vez el frontend apunte directamente a Power Automate:
 - `api/submit-enrollment.ts` → eliminar o deprecar.
 - `api/upload-pdf.ts` → eliminar o deprecar.
-- `netlify/functions/submit-enrollment.ts` → revisar si se mantiene para compatibilidad con despliegue en Netlify (fuera de scope de este plan, pero documentar).
+- `api/submit-enrollment.ts` → revisar si se mantiene para compatibilidad con despliegue en Vercel (fuera de scope de este plan, pero documentar).
 
 ---
 
@@ -212,6 +212,6 @@ En una página o entrada de WordPress, añadir un bloque HTML personalizado con 
 
 ## 9. Notas adicionales
 
-- **Netlify Functions:** el proyecto también tiene funciones en `netlify/functions/`. Este plan no las modifica. Si en el futuro se decide desplegar en Netlify en lugar de WordPress, esas funciones siguen siendo válidas como backend completo.
+- **Vercel API Routes:** el backend reside en `api/`. Este plan no lo modifica. Si en el futuro se decide mantener el despliegue en Vercel en lugar de WordPress, esas funciones siguen siendo válidas como backend completo.
 - **Sub-apps (`calculadora-tasas`, `plan-estudios`):** no están afectadas por este cambio. Siguen siendo proyectos Vite independientes.
 - **Git:** este plan se commiteará como documentación en el repositorio para referencia futura.

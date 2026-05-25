@@ -27,29 +27,21 @@ cd plan-estudios     && npm run dev   # port 3002
 
 ## TypeScript & Path Aliases
 
-- Root `tsconfig.json` **excludes** `calculadora-tasas`, `plan-estudios`, `shared`, `netlify`, `dist`. Do not expect cross-package type checking from the root.
+- Root `tsconfig.json` **excludes** `calculadora-tasas`, `plan-estudios`, `shared`, `dist`. Do not expect cross-package type checking from the root.
 - Sub-packages have their own `tsconfig.json` with `include: ["src"]`.
 - Path alias `@/*` maps to `./*` in the root app; sub-packages do not define `@/` aliases.
 
 ## Deployment Architecture
 
-**Two deployment targets exist in parallel:**
-
-1. **Vercel** (primary) — `vercel.json`
-   - `api/` routes are Vercel API Routes (Node.js). These are **thin proxies** that forward to Power Automate webhooks.
-   - SPA rewrite: `/*` → `/index.html`
-
-2. **Netlify** (secondary) — `netlify.toml`
-   - `netlify/functions/` are Netlify Functions with **full backend logic**: Azure AD auth, Dataverse CRUD, Microsoft Graph email, SharePoint file upload, duplicate checking, auto-numbering.
-   - Also SPA rewrite + security headers.
-
-**Important:** The `api/` and `netlify/functions/` files look similar but are **not interchangeable**. The Netlify versions contain the real Dataverse/Graph implementation; the Vercel versions are simple pass-throughs. If you modify one, consider whether the other needs alignment.
+**Vercel** — `vercel.json`
+- `api/` routes are Vercel API Routes (Node.js) with the full backend logic.
+- SPA rewrite: `/*` → `/index.html` (API routes are excluded from the rewrite).
 
 ## Backend Flow
 
 Enrollment submission is a **two-step process**:
 
-1. `POST /api/submit-enrollment` (or Netlify equivalent)
+1. `POST /api/submit-enrollment`
    - Checks for duplicates by `(DNI + especialidad + ensenanzaCurso)` in Dataverse
    - Returns `409` if duplicate
    - Computes next `nOrden` (auto-number per specialty+course group)
@@ -69,8 +61,7 @@ See `.env.example` for the full list. Key ones:
 - `VITE_POWER_AUTOMATE_URL=/api/submit-enrollment`
 - `VITE_POWER_AUTOMATE_URL_PDF=/api/upload-pdf`
 
-**Server (Vercel/Netlify Functions):**
-- `POWER_AUTOMATE_WEBHOOK_URL`, `POWER_AUTOMATE_PDF_WEBHOOK_URL` — Power Automate webhooks
+**Server (Vercel API Routes):**
 - `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` — Azure AD app registration
 - `DATAVERSE_URL`, `DATAVERSE_TABLE_NAME=cpmmr_matriculas`, `DATAVERSE_FILE_COLUMN=cpmmr_solicitudpdf`
 - `SHAREPOINT_SITE_URL`, `SHAREPOINT_LIST_NAME`, `SHAREPOINT_LIBRARY_NAME`
@@ -113,7 +104,6 @@ Choice values for `cr955_estadoasignatura`:
 ## Common Pitfalls
 
 - Do not assume `@/` aliases work in sub-packages; they are root-only.
-- Modifying `api/` does not affect `netlify/functions/` and vice-versa.
 - The `clean` script uses `rm -rf dist` and will fail on Windows unless using Git Bash/WSL.
 - Attachment upload limit is **9 MB total** (enforced in `App.tsx`).
 - `materias.json` must be present in `public/` for the app to load subject data; without it the form's subject selectors will be empty.

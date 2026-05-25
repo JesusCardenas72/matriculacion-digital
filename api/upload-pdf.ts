@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Request, Response } from 'express';
 
 // ── Azure AD token ────────────────────────────────────────────────────────────
 
@@ -85,9 +85,6 @@ async function createAsignaturaRecords(
 ): Promise<void> {
   const dataverseUrl = process.env.DATAVERSE_URL!;
 
-  // Tanto las del curso actual como las pendientes de cursos anteriores se
-  // consideran "Matriculada" a efectos administrativos. El detalle (Ordinaria/
-  // Pendiente) queda reflejado en el texto de cr955_asignatura.
   const estadoChoice = ESTADO_ASIGNATURA.MATRICULADA;
 
   for (const m of asignaturas) {
@@ -116,7 +113,6 @@ async function createAsignaturaRecords(
     if (!res.ok) {
       const err = await res.text();
       console.error(`Error creando asignatura ${m.MATERIA} (${tipo}): ${res.status} ${err}`);
-      // No se lanza excepción: el fallo de una asignatura no debe bloquear el resto
     }
   }
 }
@@ -243,7 +239,7 @@ async function sendEmailWithPdf(token: string, data: EmailData): Promise<void> {
   if (!res.ok) throw new Error(`Graph sendMail ${res.status}: ${await res.text()}`);
 }
 
-// ── Handler ───────────────────────────────────────────────────────────────────
+// ── CORS ──────────────────────────────────────────────────────────────────────
 
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? '*';
 const corsHeaders = {
@@ -252,16 +248,32 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-export const handler: Handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers: corsHeaders, body: '' };
+// ── Helpers para body compatible dev/prod ─────────────────────────────────────
+
+function getJsonBody(req: Request): Record<string, unknown> {
+  if (Buffer.isBuffer(req.body)) {
+    return JSON.parse(req.body.toString('utf-8') || '{}');
   }
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: corsHeaders, body: 'Method Not Allowed' };
+  if (typeof req.body === 'string') {
+    return JSON.parse(req.body || '{}');
+  }
+  return (req.body as Record<string, unknown>) || {};
+}
+
+// ── Handler ───────────────────────────────────────────────────────────────────
+
+export default async function handler(req: Request, res: Response): Promise<void> {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, corsHeaders).end();
+    return;
+  }
+  if (req.method !== 'POST') {
+    res.writeHead(405, corsHeaders).end('Method Not Allowed');
+    return;
   }
 
   try {
-    const rawBody = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+    const rawBody = getJsonBody(req);
     const body: Record<string, string> = Object.fromEntries(
       Object.entries(rawBody).map(([k, v]) => [k, v == null ? '' : String(v)])
     );
@@ -269,11 +281,9 @@ export const handler: Handler = async (event) => {
     const { rowId, fileName, contentBase64, email } = body;
 
     if (!rowId || !fileName || !contentBase64 || !email) {
-      return {
-        statusCode: 400,
-        headers: corsHeaders,
-        body: JSON.stringify({ ok: false, error: 'Faltan campos obligatorios' }),
-      };
+      res.writeHead(400, corsHeaders)
+         .end(JSON.stringify({ ok: false, error: 'Faltan campos obligatorios' }));
+      return;
     }
 
     const asignaturasCursoActual: Materia[] = body.asignaturasCursoActual
@@ -337,17 +347,11 @@ export const handler: Handler = async (event) => {
       }
     }
 
-    return {
-      statusCode: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true }),
-    };
+    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' })
+       .end(JSON.stringify({ ok: true }));
   } catch (err) {
     console.error('upload-pdf error:', err);
-    return {
-      statusCode: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: false, error: String(err) }),
-    };
+    res.writeHead(500, { ...corsHeaders, 'Content-Type': 'application/json' })
+       .end(JSON.stringify({ ok: false, error: String(err) }));
   }
-};
+}

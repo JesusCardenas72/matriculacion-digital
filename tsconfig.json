@@ -1,5 +1,5 @@
 {
-  "exclude": ["calculadora-tasas", "plan-estudios", "shared", "tools", "dist", "netlify", "GeneraciónMatriculaPDF"],
+  "exclude": ["calculadora-tasas", "plan-estudios", "shared", "tools", "dist", "GeneraciónMatriculaPDF"],
   "compilerOptions": {
     "target": "ES2022",
     "experimentalDecorators": true,

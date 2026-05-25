@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import type { Request, Response } from 'express';
 
 // ── Mapeos ────────────────────────────────────────────────────────────────────
 
@@ -158,19 +158,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+// ── Helpers para body compatible dev/prod ─────────────────────────────────────
+
+function getJsonBody(req: Request): Record<string, unknown> {
+  if (Buffer.isBuffer(req.body)) {
+    return JSON.parse(req.body.toString('utf-8') || '{}');
+  }
+  if (typeof req.body === 'string') {
+    return JSON.parse(req.body || '{}');
+  }
+  return (req.body as Record<string, unknown>) || {};
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-export const handler: Handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers: corsHeaders, body: '' };
+export default async function handler(req: Request, res: Response): Promise<void> {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, corsHeaders).end();
+    return;
   }
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: corsHeaders, body: 'Method Not Allowed' };
+  if (req.method !== 'POST') {
+    res.writeHead(405, corsHeaders).end('Method Not Allowed');
+    return;
   }
 
   try {
     // Parsear JSON enviado por el formulario
-    const f = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+    const f = getJsonBody(req);
 
     const str  = (k: string) => String(f[k] ?? '');
     const bool = (k: string) => f[k] === true || f[k] === 'true';
@@ -190,18 +204,16 @@ export const handler: Handler = async (event) => {
     if (dni && especialidad && ensenanzaCurso) {
       const isDup = await existsDuplicate(token, entitySet, dni, especialidad, ensenanzaCurso, academicYear);
       if (isDup) {
-        return {
-          statusCode: 409,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ok: false,
-            reason: 'duplicate',
-            contact: {
-              phone: '926 274 154',
-              email: '13004341.cpm@educastillalamancha.es',
-            },
-          }),
-        };
+        res.writeHead(409, { ...corsHeaders, 'Content-Type': 'application/json' })
+           .end(JSON.stringify({
+             ok: false,
+             reason: 'duplicate',
+             contact: {
+               phone: '926 274 154',
+               email: '13004341.cpm@educastillalamancha.es',
+             },
+           }));
+        return;
       }
     }
 
@@ -235,18 +247,12 @@ export const handler: Handler = async (event) => {
     });
 
     // Devolver rowId y nOrden al frontend para la segunda llamada (upload-pdf)
-    return {
-      statusCode: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, rowId, nOrden }),
-    };
+    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' })
+       .end(JSON.stringify({ ok: true, rowId, nOrden }));
 
   } catch (err) {
     console.error('submit-enrollment error:', err);
-    return {
-      statusCode: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: false, error: String(err) }),
-    };
+    res.writeHead(500, { ...corsHeaders, 'Content-Type': 'application/json' })
+       .end(JSON.stringify({ ok: false, error: String(err) }));
   }
-};
+}
