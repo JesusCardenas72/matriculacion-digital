@@ -11,6 +11,8 @@ export interface FeeInput {
   asignaturaPendiente2?: string;
   convalidacionSolicitada?: boolean;
   convalidacionAsignaturas?: string[];
+  esRepetidor?: boolean;
+  repiteSoloAsignaturasSuelta?: boolean;
 }
 
 export interface FeeResult {
@@ -32,4 +34,5 @@ export interface FeeDetails {
   matriculaHonorDiscount: number;
   multiplier: number;
   reductionLabel: string;
+  repetidorMode?: 'suelta' | 'completo' | null;
 }
