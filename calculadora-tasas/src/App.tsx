@@ -1,18 +1,12 @@
-import { useState, useMemo, useEffect, type ChangeEvent } from 'react';
+import { useState, useMemo, type ChangeEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CreditCard, GraduationCap, CheckCircle2, AlertCircle, FileText, X } from 'lucide-react';
 import {
   calcularTasas,
   CURSOS,
-  getEspecialidadesDisponibles,
   ARTICLE_TEXTS,
-  loadMaterias,
-  buildMateriasIndex,
-  queryMateriasCurso,
-  queryMateriasPrevias,
-  PROFILE_SPECIFIC_SUBJECTS,
 } from '@conservatorio/shared';
-import type { FeeInput, Materia, MateriasIndex } from '@conservatorio/shared';
+import type { FeeInput } from '@conservatorio/shared';
 
 type ReductionKey = 'ninguna' | 'fam_num_general' | 'fam_num_especial' | 'discapacidad' | 'terrorismo' | 'violencia_genero' | 'ingreso_minimo';
 
@@ -47,67 +41,47 @@ export default function CalculadoraApp() {
     formaPago: 'unico',
     asignaturaPendiente1: '',
     asignaturaPendiente2: '',
-    convalidacionSolicitada: false,
-    convalidacionAsignaturas: [],
+    esRepetidor: false,
+    repiteSoloAsignaturasSuelta: false,
   });
-  const [especialidad, setEspecialidad] = useState('');
-  const [materiasIndex, setMateriasIndex] = useState<MateriasIndex | null>(null);
-  const [materiasLoading, setMateriasLoading] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<{ title: string; text: string } | null>(null);
   const [isFeesInfoOpen, setIsFeesInfoOpen] = useState(false);
 
-  useEffect(() => {
-    loadMaterias()
-      .then(data => setMateriasIndex(buildMateriasIndex(data)))
-      .catch(() => setMateriasIndex(null))
-      .finally(() => setMateriasLoading(false));
-  }, []);
-
   const result = useMemo(() => calcularTasas(input), [input]);
 
-  const asignaturasCursoActual = useMemo(() => {
-    if (!especialidad || !input.curso || !input.tipoEnsenanza || !materiasIndex) return [];
-    const all = queryMateriasCurso(materiasIndex, especialidad, input.curso, input.tipoEnsenanza as 'elemental' | 'profesional');
-    const is5o6 = (input.curso.includes('5') || input.curso.includes('6')) && input.tipoEnsenanza === 'profesional';
-    if (!is5o6) return all;
-    const is6th = input.curso.includes('6');
-    const profileSubjects: Record<string, string[]> = is6th
-      ? { A: ['Fundamentos de Composición'], B: ['Improvisación', 'Didáctica de la Música', 'Didáctica musical'], C: ['Música moderna', 'Coro'] }
-      : { A: ['Fundamentos de Composición'], B: ['Improvisación', 'Informática musical'], C: ['Improvisación', 'Coro'] };
-    return all.filter(m => {
-      const isProfileSpecific = PROFILE_SPECIFIC_SUBJECTS.some((s: string) => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
-      return !isProfileSpecific;
-    });
-  }, [especialidad, input.curso, input.tipoEnsenanza, materiasIndex]);
+  const isRepetidorAllowed = useMemo(() => {
+    return (input.tipoEnsenanza === 'elemental' && input.curso === '4º') ||
+           (input.tipoEnsenanza === 'profesional' && input.curso === '6º');
+  }, [input.tipoEnsenanza, input.curso]);
 
-  const asignaturasPrevias = useMemo(() => {
-    if (!especialidad || !input.curso || !input.tipoEnsenanza || !materiasIndex) return [];
-    const cursoNum = parseInt(input.curso);
-    const all = queryMateriasPrevias(materiasIndex, especialidad, cursoNum, input.tipoEnsenanza as 'elemental' | 'profesional');
-    return all
-      .map(m => ({ id: m.MATERIA, label: m.DESCRIPCION + ' (' + m.CURSO_N + ')', materiaId: m.MATERIA }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [especialidad, input.curso, input.tipoEnsenanza, materiasIndex]);
+  const isRepetidor = !!input.esRepetidor && isRepetidorAllowed;
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
-    if (name === 'especialidad') { setEspecialidad(val as string); return; }
-    setInput(prev => ({ ...prev, [name]: val }));
+    setInput(prev => {
+      const next = { ...prev, [name]: val };
+      if (name === 'tipoEnsenanza' || name === 'curso') {
+        next.esRepetidor = false;
+        next.repiteSoloAsignaturasSuelta = false;
+        next.asignaturaPendiente1 = '';
+        next.asignaturaPendiente2 = '';
+      }
+      return next;
+    });
   };
 
-  const handleConvalidacionToggle = (materiaId: string) => {
+  const handleAsignaturasChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
     setInput(prev => {
-      const current = prev.convalidacionAsignaturas ?? [];
-      const updated = current.includes(materiaId) ? current.filter(id => id !== materiaId) : [...current, materiaId];
-      return { ...prev, convalidacionAsignaturas: updated, convalidacionSolicitada: updated.length > 0 };
+      if (val === '0') return { ...prev, asignaturaPendiente1: '', asignaturaPendiente2: '' };
+      if (val === '1') return { ...prev, asignaturaPendiente1: '1', asignaturaPendiente2: '' };
+      if (val === '2') return { ...prev, asignaturaPendiente1: '1', asignaturaPendiente2: '2' };
+      return prev;
     });
   };
 
   const cursos = input.tipoEnsenanza === 'elemental' ? CURSOS.elemental : input.tipoEnsenanza === 'profesional' ? CURSOS.profesional : [];
-  const especialidadesDisponibles = getEspecialidadesDisponibles(input.tipoEnsenanza);
-
-  const precioAsignatura = input.tipoEnsenanza === 'elemental' ? 47 : 58;
   const honorDisabled = input.tipoReduccion !== 'ninguna' && input.tipoReduccion !== 'fam_num_general';
 
   return (
@@ -145,73 +119,82 @@ export default function CalculadoraApp() {
                   {cursos.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Especialidad</label>
-                <select name="especialidad" value={especialidad} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
-                  <option value="" disabled>Seleccionar especialidad...</option>
-                  {especialidadesDisponibles.map(esp => <option key={esp} value={esp}>{esp}</option>)}
-                </select>
-              </div>
-            </div>
-            {materiasLoading && <p className="text-sm text-gray-400 mt-3">Cargando datos de asignaturas...</p>}
-          </section>
-
-          {/* Bloque 2: Asignaturas pendientes */}
-          <section className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-gray-50 rounded-lg"><FileText size={20} className="text-gray-600" /></div>
-              <h2 className="text-lg font-semibold">Asignaturas</h2>
             </div>
 
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Asignatura pendiente 1 <span className="text-orange-400">(+20% recargo)</span></label>
-                <select name="asignaturaPendiente1" value={input.asignaturaPendiente1} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
-                  <option value="">Ninguna...</option>
-                  {asignaturasPrevias.map(a => (<option key={a.id} value={a.id}>{a.materiaId} - {a.label}</option>))}
-                </select>
+            {/* Asignaturas pendientes */}
+            <div className="mt-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1 mb-3">Asignaturas pendientes</p>
+              <div className="flex flex-wrap gap-6">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input type="radio" name="asignaturasPendientes" value="0" checked={!input.asignaturaPendiente1 && !input.asignaturaPendiente2} onChange={handleAsignaturasChange} className="w-5 h-5 text-gray-900 border-gray-300 focus:ring-gray-900" />
+                  <span className="text-sm font-bold uppercase tracking-wider text-gray-600 group-hover:text-gray-900">Ninguna</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input type="radio" name="asignaturasPendientes" value="1" checked={!!input.asignaturaPendiente1 && !input.asignaturaPendiente2} onChange={handleAsignaturasChange} className="w-5 h-5 text-gray-900 border-gray-300 focus:ring-gray-900" />
+                  <span className="text-sm font-bold uppercase tracking-wider text-gray-600 group-hover:text-gray-900">1 Asignatura</span>
+                </label>
+                {input.tipoEnsenanza === 'profesional' && (
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                    <input type="radio" name="asignaturasPendientes" value="2" checked={!!input.asignaturaPendiente1 && !!input.asignaturaPendiente2} onChange={handleAsignaturasChange} className="w-5 h-5 text-gray-900 border-gray-300 focus:ring-gray-900" />
+                    <span className="text-sm font-bold uppercase tracking-wider text-gray-600 group-hover:text-gray-900">2 Asignaturas</span>
+                  </label>
+                )}
               </div>
-              {input.tipoEnsenanza === 'profesional' && (
-                <div className="space-y-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Asignatura pendiente 2 <span className="text-orange-400">(+20% recargo)</span></label>
-                  <select name="asignaturaPendiente2" value={input.asignaturaPendiente2} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
-                    <option value="">Ninguna...</option>
-                    {asignaturasPrevias.map(a => (<option key={a.id} value={a.id}>{a.materiaId} - {a.label}</option>))}
-                  </select>
+            </div>
+
+            {/* Repetidor */}
+            <div className="mt-6">
+              <label className="toggle-label">
+                <div className="toggle">
+                  <input
+                    className="toggle-state"
+                    type="checkbox"
+                    name="esRepetidor"
+                    checked={!!input.esRepetidor}
+                    onChange={handleChange}
+                  />
+                  <div className="indicator" />
                 </div>
-              )}
-
-              {/* Convalidación */}
-              {asignaturasCursoActual.length > 0 && (
-                <div className="mt-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
-                    Convalidar asignaturas (descuento de {precioAsignatura}€/asig.)
+                <span className="text-sm font-medium text-gray-700">
+                  Repetidor
+                </span>
+                {input.esRepetidor && (
+                  <span className="text-sm font-bold text-red-600">Sí</span>
+                )}
+              </label>
+              {input.esRepetidor && isRepetidorAllowed && (
+                <div className="mt-3 space-y-3">
+                  <label className="toggle-label">
+                    <div className="toggle">
+                      <input
+                        className="toggle-state"
+                        type="checkbox"
+                        name="repiteSoloAsignaturasSuelta"
+                        checked={!!input.repiteSoloAsignaturasSuelta}
+                        onChange={handleChange}
+                      />
+                      <div className="indicator" />
+                    </div>
+                    <span className="text-sm font-medium text-gray-700">
+                      Repite solo con asignaturas sueltas
+                    </span>
+                    {input.repiteSoloAsignaturasSuelta && (
+                      <span className="text-sm font-bold text-red-600">Sí</span>
+                    )}
+                  </label>
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">
+                    {input.tipoEnsenanza === 'elemental' ? (
+                      <span><strong>EE4 repetidor:</strong> si marca esta opción, pagará solo la asignatura pendiente con recargo +20%. Si no, abonará el curso completo con recargo +20%.</span>
+                    ) : (
+                      <span><strong>EP6 repetidor:</strong> si marca esta opción, pagará solo las asignaturas pendientes con recargo +20%. Si no, abonará el curso completo con recargo +20%.</span>
+                    )}
                   </p>
-                  <div className="space-y-1 max-h-64 overflow-y-auto">
-                    {asignaturasCursoActual.map(m => {
-                      const checked = (input.convalidacionAsignaturas ?? []).includes(m.MATERIA);
-                      return (
-                        <label key={m.MATERIA}
-                          className={cls('flex items-center gap-3 cursor-pointer px-3 py-2 rounded-xl transition-all',
-                            checked ? 'bg-blue-50 border border-blue-200' : 'bg-white hover:bg-gray-100')}>
-                          <input type="checkbox" checked={checked} onChange={() => handleConvalidacionToggle(m.MATERIA)}
-                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                          <span className="text-sm text-gray-700">{m.DESCRIPCION}</span>
-                          {checked && (
-                            <span className="ml-auto text-xs font-semibold text-blue-600">
-                              −{precioAsignatura}€
-                            </span>
-                          )}
-                        </label>
-                      );
-                    })}
-                  </div>
                 </div>
               )}
             </div>
           </section>
 
-          {/* Bloque 3: Apertura expediente + Reducciones + Forma de pago */}
+          {/* Bloque 2: Apertura expediente + Reducciones + Forma de pago */}
           <section className="bg-white rounded-[2rem] p-6 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -329,16 +312,15 @@ export default function CalculadoraApp() {
                 </div>
 
                 <div className="space-y-3 mb-6">
-                  <Row label="Servicios Generales" value={result.details.serviciosGenerales.toFixed(2) + '€'} />
+                  <Row label={result.details.repetidorMode ? 'Servicios Generales — Repetidor +20%' : 'Servicios Generales'} value={result.details.serviciosGenerales.toFixed(2) + '€'} />
                   {input.esPrimerAno && (
-                    <Row label="Apertura de Expediente" value={result.details.aperturaExpediente.toFixed(2) + '€'} />
+                    <Row label={result.details.repetidorMode ? 'Apertura de Expediente — Repetidor +20%' : 'Apertura de Expediente'} value={result.details.aperturaExpediente.toFixed(2) + '€'} />
                   )}
-                  <Row label={'Matrícula Curso (' + input.curso + ')'} value={result.details.curso.toFixed(2) + '€'} />
+                  {result.details.repetidorMode !== 'suelta' && (
+                    <Row label={result.details.repetidorMode === 'completo' ? 'Matrícula Curso (' + input.curso + ') Repetidor +20%' : 'Matrícula Curso (' + input.curso + ')'} value={result.details.curso.toFixed(2) + '€'} />
+                  )}
                   {result.details.asignaturasPendientes > 0 && (
-                    <Row label="Asignaturas Pendientes (+20%)" value={result.details.asignaturasPendientes.toFixed(2) + '€'} />
-                  )}
-                  {result.details.convalidacionDiscount > 0 && (
-                    <Row label={'Convalidación (' + result.details.convalidacionCount + ' asig.)'} value={'-' + result.details.convalidacionDiscount.toFixed(2) + '€'} h />
+                    <Row label={result.details.repetidorMode === 'suelta' ? 'Asig. Repetidor (+20%)' : 'Asignaturas Pendientes (+20%)'} value={result.details.asignaturasPendientes.toFixed(2) + '€'} />
                   )}
                   {result.details.matriculaHonorDiscount > 0 && (
                     <Row label="Matrícula de Honor (Art. 13)" value={'-' + result.details.matriculaHonorDiscount.toFixed(2) + '€'} h />
