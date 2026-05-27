@@ -54,7 +54,7 @@ export default defineConfig(({ mode }) => ({
   ],
   build: {
     assetsInlineLimit: 200000,
-    copyPublicDir: false,
+    copyPublicDir: true,
   },
   resolve: {
     alias: {
