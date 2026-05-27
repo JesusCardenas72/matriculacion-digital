@@ -68,6 +68,7 @@ export default function App() {
   const [selectedArticle, setSelectedArticle] = useState<{ title: string; text: string } | null>(null);
   const [validationErrors, setValidationErrors] = useState<{ key: string; label: string }[]>([]);
   const [showValidationModal, setShowValidationModal] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
   const [viewMode, setViewMode] = useState<'form' | 'readonly'>('form');
   const [isConvalidacionModalOpen, setIsConvalidacionModalOpen] = useState(false);
   const [isConvalidacionSubjectModalOpen, setIsConvalidacionSubjectModalOpen] = useState(false);
@@ -530,9 +531,8 @@ export default function App() {
       return;
     }
 
-    // Validation passed: show preview in readonly mode
-    setViewMode('readonly');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Validation passed: show reminder modal before preview
+    setShowReminderModal(true);
   };
 
   const currentYear = getCurrentCalendarYear();
@@ -1710,6 +1710,60 @@ export default function App() {
                         >
                           Entendido
                         </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {showReminderModal && (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowReminderModal(false)}
+                        className="fixed inset-0 bg-black/40 backdrop-blur-md z-[140]"
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl z-[150] border border-orange-100"
+                      >
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">
+                            <AlertCircle size={24} />
+                          </div>
+                          <h3 className="text-xl font-bold text-gray-900">Documentación necesaria</h3>
+                        </div>
+
+                        <div className="bg-orange-50 rounded-2xl p-6 mb-6">
+                          <p className="text-sm text-orange-900 font-medium leading-relaxed">
+                            RECUERDE: debe adjuntar la documentación necesaria para la matriculación que se le ha informado en los apartados anteriores (justificante de pago de tasas, DNI, tarjeta de familia numerosa, ...), sin esta documentación no podremos tramitar su solicitud.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowReminderModal(false);
+                              setViewMode('readonly');
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
+                          >
+                            Entendido, continuar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowReminderModal(false)}
+                            className="w-full py-4 bg-transparent text-gray-700 border-2 border-gray-200 rounded-xl font-bold uppercase tracking-widest hover:bg-gray-50 transition-all"
+                          >
+                            Volver
+                          </button>
+                        </div>
                       </motion.div>
                     </>
                   )}
