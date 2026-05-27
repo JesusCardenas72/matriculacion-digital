@@ -41,9 +41,12 @@ export function calcularTasas(input: FeeInput): FeeResult | null {
     subtotalAcad = cursoBase + pending1Cost + pending2Cost;
   }
 
-  const numConvalidadas = input.convalidacionSolicitada
-    ? (input.convalidacionAsignaturas ?? []).length
-    : 0;
+  const numConvalidadas =
+    input.numAsignaturasConvalidadas !== undefined && input.numAsignaturasConvalidadas > 0
+      ? input.numAsignaturasConvalidadas
+      : input.convalidacionSolicitada
+        ? (input.convalidacionAsignaturas ?? []).length
+        : 0;
   const convalidacionDiscount = numConvalidadas * fees.precioAsignatura;
   subtotalAcad = Math.max(0, subtotalAcad - convalidacionDiscount);
 

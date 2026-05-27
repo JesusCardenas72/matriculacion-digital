@@ -11,6 +11,7 @@ export interface FeeInput {
   asignaturaPendiente2?: string;
   convalidacionSolicitada?: boolean;
   convalidacionAsignaturas?: string[];
+  numAsignaturasConvalidadas?: number;
   esRepetidor?: boolean;
   repiteSoloAsignaturasSuelta?: boolean;
 }
