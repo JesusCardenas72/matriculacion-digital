@@ -2225,14 +2225,6 @@ export default function App() {
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handlePreviewPdf}
-                    className="w-full mt-2 py-3 bg-transparent text-white border-2 border-white/30 rounded-xl font-bold uppercase tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-                  >
-                    Previsualizar PDF
-                  </button>
-
                   <div className="border-t border-white/15 my-4" />
 
                   <button
