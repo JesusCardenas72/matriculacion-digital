@@ -9,7 +9,7 @@ import { loadMaterias, buildMateriasIndex, getMaterias, queryMateriasCurso, quer
 import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, FileText, Download, Paperclip, X, ExternalLink, HelpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 const loadPdfModule = () => import('@react-pdf/renderer');
-import { mergePdfAttachments } from './utils/mergePdfAttachments';
+const loadPdfLib = () => import('pdf-lib');
 import { MatriculaPdf } from './MatriculaPdf';
 import { TutorialPdf } from './TutorialPdf';
 import logoCpm from './assets/logo_cpm.png';
@@ -141,7 +141,6 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error' | 'duplicate'>('idle');
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitWarning, setSubmitWarning] = useState<string | null>(null);
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
 
@@ -592,6 +591,22 @@ export default function App() {
 
   const currentYear = getCurrentCalendarYear();
 
+  // ── helper: convert image File to PNG Uint8Array (for pdf-lib attachments) ──
+  const _imageToPngBytes = (file: File): Promise<Uint8Array> =>
+    new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        c.getContext('2d')!.drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        fetch(c.toDataURL('image/png'))
+          .then(r => r.arrayBuffer()).then(ab => resolve(new Uint8Array(ab))).catch(reject);
+      };
+      img.onerror = reject; img.src = url;
+    });
+
   // ── helper: build the final merged PDF (page 1 = form, rest = attachments) ──
   const buildPdfBytes = async (ts: Date, reqNum: string | null): Promise<{ bytes: Uint8Array; filename: string }> => {
     const { pdf } = await loadPdfModule();
@@ -611,10 +626,64 @@ export default function App() {
     const ds = ts.toLocaleDateString('es-ES').replace(/\//g, '-');
     const hs = ts.toLocaleTimeString('es-ES').replace(/:/g, '-');
     const filename = `SOLICITUD_${ds}_${hs}.pdf`;
-    const mainBytes = new Uint8Array(await mainBlob.arrayBuffer());
 
-    const bytes = await mergePdfAttachments(mainBytes, attachments);
-    return { bytes, filename };
+    if (attachments.length === 0) {
+      return { bytes: new Uint8Array(await mainBlob.arrayBuffer()), filename };
+    }
+
+    // Merge attachments as subsequent pages
+    const { PDFDocument, StandardFonts, rgb } = await loadPdfLib();
+    const mainBytes = new Uint8Array(await mainBlob.arrayBuffer());
+    const pdfDoc = await PDFDocument.load(mainBytes);
+    const A4W = 595.28, A4H = 841.89;
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    for (const file of attachments) {
+      if (file.type === 'application/pdf') {
+        const srcDoc = await PDFDocument.load(await file.arrayBuffer());
+        const copied = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+        copied.forEach(pg => pdfDoc.addPage(pg));
+      } else if (file.type.startsWith('image/')) {
+        const embImg = file.type === 'image/jpeg'
+          ? await pdfDoc.embedJpg(await file.arrayBuffer())
+          : await pdfDoc.embedPng(await _imageToPngBytes(file));
+        const { width: iW, height: iH } = embImg;
+        const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
+        const pg = pdfDoc.addPage([A4W, A4H]);
+        pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
+        pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+      }
+    }
+
+    return { bytes: await pdfDoc.save(), filename };
+  };
+
+  // ── helper: verifica que CADA adjunto se puede leer/incrustar ANTES de crear
+  // el registro en Dataverse, usando la misma ruta de incrustado que buildPdfBytes.
+  // Si un adjunto es ilegible, aborta con un mensaje claro y SIN dejar registro huérfano. ──
+  const validateAttachments = async (): Promise<void> => {
+    if (attachments.length === 0) return;
+    const { PDFDocument } = await loadPdfLib();
+    for (const file of attachments) {
+      if (file.type === 'application/pdf') {
+        try {
+          await PDFDocument.load(await file.arrayBuffer());
+        } catch {
+          throw new Error(`No se pudo leer el PDF adjunto «${file.name}». Si está protegido con contraseña, desbloquéalo y vuelve a adjuntarlo.`);
+        }
+      } else if (file.type.startsWith('image/')) {
+        try {
+          const probe = await PDFDocument.create();
+          if (file.type === 'image/jpeg') {
+            await probe.embedJpg(await file.arrayBuffer());
+          } else {
+            await probe.embedPng(await _imageToPngBytes(file));
+          }
+        } catch {
+          throw new Error(`No se pudo procesar la imagen «${file.name}». Conviértela a JPG o PNG e inténtalo de nuevo.`);
+        }
+      }
+    }
   };
 
   // ── helper: encode Uint8Array to Base64 safely (chunked to avoid stack overflow) ──
@@ -661,6 +730,11 @@ export default function App() {
         const ensenanzaCursoNum = formData.curso.replace(/\D/g, '');
         const ensenanzaCurso = ensenanzaCursoPrefix && ensenanzaCursoNum ? `${ensenanzaCursoPrefix}${ensenanzaCursoNum}` : '';
 
+        // ── Paso 0: Validar adjuntos antes de tocar el backend ───────────────
+        // Garantiza que el PDF se podrá generar; si un adjunto es ilegible aborta
+        // aquí, sin crear registro en Dataverse ni enviar nada a Power Automate.
+        await validateAttachments();
+
         // ── Paso 1: Comprobar duplicados ─────────────────────────────────────
         const resDup = await fetch(PA_DUPLICADOS_URL, {
           method: 'POST',
@@ -700,24 +774,7 @@ export default function App() {
         const dataNOrden = await resNOrden.json() as { nOrden?: number };
         const nOrdenCalculado: number = dataNOrden?.nOrden ?? 1;
 
-        // ── Paso 3: Intentar generar PDF localmente (no bloqueante) ─────────
-        // Si la generación falla (p.ej. adjunto protegido) se registra el error
-        // pero se continúa para guardar los datos en Dataverse y enviar un email
-        // de aviso al alumno con instrucciones para reenviar la documentación.
-        reqNum = String(nOrdenCalculado);
-        setRequestNumber(reqNum);
-        let pdfBuildError: string | null = null;
-        try {
-          ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
-        } catch (pdfErr) {
-          pdfBuildError = pdfErr instanceof Error ? pdfErr.message : 'Error desconocido al generar el PDF';
-          console.error('[PDF build error]', pdfBuildError);
-          const ds = now.toLocaleDateString('es-ES').replace(/\//g, '-');
-          const hs = now.toLocaleTimeString('es-ES').replace(/:/g, '-');
-          filename = `SOLICITUD_${ds}_${hs}.pdf`;
-        }
-
-        // ── Paso 4: Crear registro en Dataverse ─────────────────────────────
+        // ── Paso 3: Crear registro en Dataverse ─────────────────────────────
         const asignaturasParaDataverse = [
           ...asignaturasCursoActual.map(a => ({
             codigo: a.MATERIA,
@@ -790,87 +847,69 @@ export default function App() {
         if (!rowId) throw new Error(`No se recibió rowId del servidor`);
         if (!nOrden) throw new Error(`Registro creado (${rowId}) pero nOrden devuelto es ${nOrden} — revisa la acción Response del flujo PA_CREAR`);
 
-        // ── Paso 5: Subir PDF + email + asignaturas ─────────────────────────
+        reqNum = String(nOrden);
+        setRequestNumber(reqNum);
+
+        ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
+
+        // ── Paso 4: Subir PDF + email + asignaturas ─────────────────────────
         const perfilEmailLabel =
           formData.perfilProfesional === 'A' ? 'Perfil A — Fundamentos de Composición'
           : formData.perfilProfesional === 'B' ? (formData.curso.includes('5') ? 'Perfil B — Improvisación / Informática Musical' : 'Perfil B — Didáctica Musical / Improvisación')
           : formData.perfilProfesional === 'C' ? (formData.curso.includes('5') ? 'Perfil C — Improvisación / Instrumento Complementario' : 'Perfil C — Improvisación / Música Moderna')
           : '';
 
-        const commonEmailFields = {
-          rowId,
-          nOrden,
-          requestNumber: reqNum,
-          academicYear,
-          fileName: filename,
-          nombre:               formData.nombre,
-          apellidos:            formData.apellidos,
-          email:                formData.email,
-          dni:                  formData.dni,
-          fechaNacimiento:      formData.fechaNacimiento,
-          domicilio:            formData.domicilio,
-          localidad:            formData.localidad,
-          provincia:            formData.provincia,
-          codigoPostal:         formData.codigoPostal,
-          telefono:             formData.telefono,
-          horaSalidaEstudios:   formData.horaSalidaEstudios,
-          tipoCurso:            `${formData.tipoEnsenanza === 'elemental' ? 'Enseñanza Elemental' : 'Enseñanza Profesional'} — ${formData.curso}`,
-          especialidad:         formData.especialidad,
-          asignaturaPendiente1: selectedPendingSubjects[0]?.label || formData.asignaturaPendiente1 || '',
-          asignaturaPendiente2: selectedPendingSubjects[1]?.label || formData.asignaturaPendiente2 || '',
-          perfil:               perfilEmailLabel,
-          formaPago:            formData.formaPago === 'unico' ? 'Pago Único' : formData.formaPago === 'fraccionado' ? 'Pago Fraccionado' : 'Solicita Beca',
-          reduccion:            REDUCCION_LABEL[formData.tipoReduccion ?? ''] ?? '',
-          importeTotal:         formData.importeTotal ? `${formData.importeTotal} EUR` : '',
-          importe1erPago:       formData.importe1erPago ? `${formData.importe1erPago} EUR` : '',
-          importe2oPago:        formData.importe2oPago ? `${formData.importe2oPago} EUR` : '',
-          asignaturasCursoActual: JSON.stringify(asignaturasCursoActual),
-          asignaturasPendientes:  JSON.stringify(
-            selectedPendingSubjects
-              .map(s => (getMaterias() ?? []).find(m => m.MATERIA === s.id))
-              .filter(Boolean)
-          ),
-        };
-
-        if (!pdfBuildError) {
-          // Flujo normal: subir PDF + email con PDF adjunto
-          const resPdf = await fetch(PA_PDF_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              ...commonEmailFields,
-              mimeType:      'application/pdf',
-              contentBase64: uint8ToBase64(pdfBytes),
-            }),
-          });
-          if (!resPdf.ok) throw new Error(
-            `Tu solicitud de matrícula nº ${nOrden} fue registrada correctamente, pero hubo un problema al adjuntar el PDF (HTTP ${resPdf.status}). Por favor, contacta con el centro indicando tu número de matrícula.`
-          );
-        } else {
-          // PDF falló: enviar email de aviso sin PDF para que el alumno reenvíe la documentación
-          const resNotif = await fetch(PA_PDF_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...commonEmailFields, pdfOmitted: 'true', pdfError: pdfBuildError }),
-          });
-          if (!resNotif.ok) {
-            // El registro está guardado; el fallo del email de aviso no es bloqueante
-            console.error(`Email de aviso sin PDF falló (HTTP ${resNotif.status})`);
-          }
-          setSubmitWarning(pdfBuildError);
-        }
+        const resPdf = await fetch(PA_PDF_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rowId,
+            nOrden,
+            requestNumber: reqNum,
+            academicYear,
+            fileName: filename,
+            mimeType: 'application/pdf',
+            contentBase64: uint8ToBase64(pdfBytes),
+            nombre:               formData.nombre,
+            apellidos:            formData.apellidos,
+            email:                formData.email,
+            dni:                  formData.dni,
+            fechaNacimiento:      formData.fechaNacimiento,
+            domicilio:            formData.domicilio,
+            localidad:            formData.localidad,
+            provincia:            formData.provincia,
+            codigoPostal:         formData.codigoPostal,
+            telefono:             formData.telefono,
+            horaSalidaEstudios:   formData.horaSalidaEstudios,
+            tipoCurso:            `${formData.tipoEnsenanza === 'elemental' ? 'Enseñanza Elemental' : 'Enseñanza Profesional'} — ${formData.curso}`,
+            especialidad:         formData.especialidad,
+            asignaturaPendiente1: selectedPendingSubjects[0]?.label || formData.asignaturaPendiente1 || '',
+            asignaturaPendiente2: selectedPendingSubjects[1]?.label || formData.asignaturaPendiente2 || '',
+            perfil:               perfilEmailLabel,
+            formaPago:            formData.formaPago === 'unico' ? 'Pago Único' : formData.formaPago === 'fraccionado' ? 'Pago Fraccionado' : 'Solicita Beca',
+            reduccion:            REDUCCION_LABEL[formData.tipoReduccion ?? ''] ?? '',
+            importeTotal:         formData.importeTotal ? `${formData.importeTotal} EUR` : '',
+            importe1erPago:       formData.importe1erPago ? `${formData.importe1erPago} EUR` : '',
+            importe2oPago:        formData.importe2oPago ? `${formData.importe2oPago} EUR` : '',
+            asignaturasCursoActual: JSON.stringify(asignaturasCursoActual),
+            asignaturasPendientes:  JSON.stringify(
+              selectedPendingSubjects
+                .map(s => (getMaterias() ?? []).find(m => m.MATERIA === s.id))
+                .filter(Boolean)
+            ),
+          }),
+        });
+        if (!resPdf.ok) throw new Error(`Error al subir el PDF (HTTP ${resPdf.status})`);
       } else {
         // Re-descarga: reconstruir el PDF con el número de orden ya guardado en estado
         ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
       }
 
-      // Descargar PDF al usuario sólo si se generó correctamente
-      if (pdfBytes!) {
-        const downloadUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }));
-        const link = document.createElement('a');
-        link.href = downloadUrl; link.download = filename; link.click();
-        URL.revokeObjectURL(downloadUrl);
-      }
+      // Descarga el PDF al usuario (mismo archivo enviado)
+      const downloadUrl = URL.createObjectURL(new Blob([pdfBytes], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = downloadUrl; link.download = filename; link.click();
+      URL.revokeObjectURL(downloadUrl);
 
       setSubmitStatus('success');
       if (!alreadySubmitted) setAttachments([]);
@@ -884,7 +923,6 @@ export default function App() {
   };
 
   if (submitStatus === 'success') {
-    const hasPdfWarning = !!submitWarning;
     return (
       <div className="min-h-screen bg-[#f5f5f5] flex items-center justify-center p-4">
         <motion.div
@@ -892,55 +930,17 @@ export default function App() {
           animate={{ opacity: 1, scale: 1 }}
           className="bg-white p-8 rounded-3xl shadow-sm max-w-md w-full text-center"
         >
-          {hasPdfWarning ? (
-            <>
-              <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <AlertCircle size={40} />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Datos recibidos</h2>
-              <p className="text-gray-600 mb-4">
-                Tus datos de matrícula para el curso <strong>{academicYear}</strong> han sido registrados correctamente.
-              </p>
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 text-left">
-                <p className="text-amber-800 font-semibold text-sm mb-1">⚠️ Documentos adjuntos no procesados</p>
-                <p className="text-amber-700 text-sm mb-2">
-                  Hubo un problema al generar el PDF con los documentos que adjuntaste. Tus datos de matrícula <strong>sí han sido guardados</strong>, pero la documentación adjunta no se ha enviado.
-                </p>
-                <p className="text-amber-700 text-sm font-medium">
-                  Motivo técnico: <span className="font-normal">{submitWarning}</span>
-                </p>
-              </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6 text-left">
-                <p className="text-blue-800 font-semibold text-sm mb-1">📧 Qué debes hacer ahora</p>
-                <p className="text-blue-700 text-sm mb-2">
-                  Te hemos enviado un correo de confirmación con instrucciones. Debes reenviar los documentos adjuntos directamente por email al centro:
-                </p>
-                <a
-                  href="mailto:13004341.cpm@educastillalamancha.es"
-                  className="text-blue-600 font-semibold text-sm underline break-all"
-                >
-                  13004341.cpm@educastillalamancha.es
-                </a>
-                <p className="text-blue-700 text-sm mt-2">
-                  Indica en el asunto: <strong>«Documentos matrícula nº {requestNumber} — {formData.nombre} {formData.apellidos}»</strong>
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 size={40} />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">¡Matrícula Enviada!</h2>
-              <p className="text-gray-600 mb-6">
-                Tu solicitud para el curso {academicYear} ha sido recibida correctamente. Recibirás un correo de confirmación en breve.
-              </p>
-            </>
-          )}
+          <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircle2 size={40} />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">¡Matrícula Enviada!</h2>
+          <p className="text-gray-600 mb-6">
+            Tu solicitud para el curso {academicYear} ha sido recibida correctamente. Recibirás un correo de confirmación en breve.
+          </p>
           <div className="flex flex-col gap-3">
             <button
               type="button"
-              onClick={() => { setSubmitStatus('idle'); setSubmitWarning(null); }}
+              onClick={() => setSubmitStatus('idle')}
               className="w-full py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-colors"
             >
               ← Volver
@@ -949,7 +949,6 @@ export default function App() {
               type="button"
               onClick={() => {
                 setSubmitStatus('idle');
-                setSubmitWarning(null);
                 setViewMode('form');
                 setSubmitTimestamp(null);
                 setRequestNumber(null);
