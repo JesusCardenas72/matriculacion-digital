@@ -121,7 +121,7 @@ async function createAsignaturaRecords(
   }
 }
 
-// ── Graph: enviar email con PDF adjunto ───────────────────────────────────────
+// ── Graph: enviar emails ──────────────────────────────────────────────────────
 
 interface EmailData {
   to: string;
@@ -148,6 +148,7 @@ interface EmailData {
   academicYear: string;
   fileName: string;
   contentBase64: string;
+  requestNumber?: string;
 }
 
 function formatDate(iso: string): string {
@@ -243,6 +244,98 @@ async function sendEmailWithPdf(token: string, data: EmailData): Promise<void> {
   if (!res.ok) throw new Error(`Graph sendMail ${res.status}: ${await res.text()}`);
 }
 
+// ── Graph: enviar email de aviso cuando los adjuntos no pudieron procesarse ───
+
+async function sendEmailNoPdf(
+  token: string,
+  data: Omit<EmailData, 'contentBase64'>,
+  pdfError: string,
+): Promise<void> {
+  const sender = process.env.GRAPH_SENDER_EMAIL!;
+  const nOrden = data.requestNumber ?? '—';
+
+  const tablaPersonal = `
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr><td style="padding:6px 8px;color:#6b7280;width:40%">Nombre y apellidos</td><td style="padding:6px 8px;font-weight:bold">${data.nombre} ${data.apellidos}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:6px 8px;color:#6b7280">DNI / NIE</td><td style="padding:6px 8px">${data.dni}</td></tr>
+      <tr><td style="padding:6px 8px;color:#6b7280">Fecha de nacimiento</td><td style="padding:6px 8px">${formatDate(data.fechaNacimiento)}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:6px 8px;color:#6b7280">Domicilio</td><td style="padding:6px 8px">${data.domicilio}, ${data.localidad} (${data.provincia}) — CP ${data.codigoPostal}</td></tr>
+      <tr><td style="padding:6px 8px;color:#6b7280">Email</td><td style="padding:6px 8px">${data.to}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:6px 8px;color:#6b7280">Teléfono</td><td style="padding:6px 8px">${data.telefono}</td></tr>
+    </table>`;
+
+  const tablaMatricula = `
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr><td style="padding:6px 8px;color:#6b7280;width:40%">Nº de matrícula</td><td style="padding:6px 8px;font-weight:bold;font-size:15px">${nOrden}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:6px 8px;color:#6b7280">Curso académico</td><td style="padding:6px 8px">${data.academicYear}</td></tr>
+      <tr><td style="padding:6px 8px;color:#6b7280">Tipo / Curso</td><td style="padding:6px 8px">${data.tipoCurso}</td></tr>
+      <tr style="background:#f9fafb"><td style="padding:6px 8px;color:#6b7280">Especialidad</td><td style="padding:6px 8px;font-weight:bold">${data.especialidad}</td></tr>
+      <tr><td style="padding:6px 8px;color:#6b7280">Forma de pago</td><td style="padding:6px 8px">${data.formaPago}</td></tr>
+      ${data.importeTotal ? `<tr style="background:#f9fafb"><td style="padding:6px 8px;color:#6b7280">Importe total</td><td style="padding:6px 8px;font-weight:bold">${data.importeTotal}</td></tr>` : ''}
+    </table>`;
+
+  const html = `
+<div style="font-family:Arial,sans-serif;font-size:14px;color:#1f2937;max-width:680px;margin:0 auto">
+
+  <div style="background:#1e40af;padding:20px 24px;border-radius:8px 8px 0 0">
+    <p style="color:#ffffff;font-size:18px;font-weight:bold;margin:0">Conservatorio Profesional de Música "Marcos Redondo"</p>
+    <p style="color:#bfdbfe;font-size:13px;margin:4px 0 0">Ciudad Real</p>
+  </div>
+
+  <div style="background:#fffbeb;border:1px solid #fcd34d;padding:16px 24px;margin:0">
+    <p style="margin:0;font-size:15px">⚠️ Estimado/a <b>${data.nombre} ${data.apellidos}</b>,</p>
+    <p style="margin:8px 0 0;color:#92400e">Tus datos de matrícula han sido recibidos y registrados con el número <b>${nOrden}</b>. Sin embargo, hubo un problema al generar el PDF con los documentos adjuntos, por lo que no han llegado al centro.</p>
+  </div>
+
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;padding:16px 24px;margin:0">
+    <p style="margin:0;font-size:14px;font-weight:bold;color:#1e40af">📧 Acción requerida: reenvía tu documentación</p>
+    <p style="margin:8px 0 0;color:#1e3a8a;font-size:13px">Por favor, envía los documentos que necesitabas adjuntar a la siguiente dirección:</p>
+    <p style="margin:8px 0 0"><a href="mailto:13004341.cpm@educastillalamancha.es" style="color:#1e40af;font-weight:bold;font-size:14px">13004341.cpm@educastillalamancha.es</a></p>
+    <p style="margin:8px 0 0;color:#1e3a8a;font-size:13px">Indica en el asunto del correo:<br>
+    <b>«Documentos matrícula nº ${nOrden} — ${data.nombre} ${data.apellidos}»</b></p>
+  </div>
+
+  <div style="padding:16px 24px 0">
+    <p style="font-size:11px;font-weight:bold;color:#6b7280;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:10px">Datos Registrados</p>
+    ${tablaPersonal}
+  </div>
+
+  <div style="padding:16px 24px 0">
+    <p style="font-size:11px;font-weight:bold;color:#6b7280;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:10px">Datos de Matriculación</p>
+    ${tablaMatricula}
+  </div>
+
+  <div style="background:#fef2f2;border:1px solid #fecaca;padding:12px 24px;margin-top:16px;font-size:12px;color:#7f1d1d">
+    <p style="margin:0"><b>Motivo técnico del problema:</b> ${pdfError}</p>
+    <p style="margin:6px 0 0">Si necesitas ayuda, contáctanos indicando tu número de matrícula (<b>${nOrden}</b>).</p>
+  </div>
+
+  <div style="background:#f3f4f6;padding:16px 24px;margin-top:0;border-top:1px solid #e5e7eb;border-radius:0 0 8px 8px;font-size:12px;color:#6b7280">
+    <p style="margin:0">📞 <b>926 27 41 54</b> &nbsp;|&nbsp; ✉️ <a href="mailto:13004341.cpm@educastillalamancha.es" style="color:#1e40af">13004341.cpm@educastillalamancha.es</a></p>
+    <p style="margin:10px 0 0">Un saludo,<br><b>Secretaría del CPM "Marcos Redondo"</b> — Ciudad Real</p>
+  </div>
+
+</div>`.trim();
+
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${sender}/sendMail`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: {
+          subject: `Matrícula nº ${nOrden} recibida — documentos adjuntos pendientes de envío`,
+          body: { contentType: 'HTML', content: html },
+          toRecipients: [{ emailAddress: { address: data.to } }],
+        },
+        saveToSentItems: true,
+      }),
+    },
+  );
+
+  if (!res.ok) throw new Error(`Graph sendMail (noPdf) ${res.status}: ${await res.text()}`);
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? '*';
@@ -266,13 +359,22 @@ export const handler: Handler = async (event) => {
       Object.entries(rawBody).map(([k, v]) => [k, v == null ? '' : String(v)])
     );
 
-    const { rowId, fileName, contentBase64, email } = body;
+    const { rowId, fileName, email } = body;
+    const pdfOmitted = body.pdfOmitted === 'true';
+    const contentBase64 = body.contentBase64 ?? '';
 
-    if (!rowId || !fileName || !contentBase64 || !email) {
+    if (!rowId || !fileName || !email) {
       return {
         statusCode: 400,
         headers: corsHeaders,
         body: JSON.stringify({ ok: false, error: 'Faltan campos obligatorios' }),
+      };
+    }
+    if (!pdfOmitted && !contentBase64) {
+      return {
+        statusCode: 400,
+        headers: corsHeaders,
+        body: JSON.stringify({ ok: false, error: 'Falta contentBase64 para subir el PDF' }),
       };
     }
 
@@ -286,54 +388,60 @@ export const handler: Handler = async (event) => {
     const nOrdenParsed = body.nOrden ? Number(body.nOrden) : NaN;
     const nOrden = Number.isFinite(nOrdenParsed) ? nOrdenParsed : null;
 
-    const fileBuffer = Buffer.from(contentBase64, 'base64');
+    const commonEmailData = {
+      to:                   email,
+      nombre:               body.nombre               ?? '',
+      apellidos:            body.apellidos             ?? '',
+      dni:                  body.dni                   ?? '',
+      fechaNacimiento:      body.fechaNacimiento        ?? '',
+      domicilio:            body.domicilio              ?? '',
+      localidad:            body.localidad              ?? '',
+      provincia:            body.provincia              ?? '',
+      codigoPostal:         body.codigoPostal           ?? '',
+      telefono:             body.telefono               ?? '',
+      horaSalidaEstudios:   body.horaSalidaEstudios     ?? '',
+      tipoCurso:            body.tipoCurso              ?? '',
+      especialidad:         body.especialidad           ?? '',
+      asignaturaPendiente1: body.asignaturaPendiente1   ?? '',
+      asignaturaPendiente2: body.asignaturaPendiente2   ?? '',
+      perfil:               body.perfil                 ?? '',
+      formaPago:            body.formaPago              ?? '',
+      reduccion:            body.reduccion              ?? '',
+      importeTotal:         body.importeTotal           ?? '',
+      importe1erPago:       body.importe1erPago         ?? '',
+      importe2oPago:        body.importe2oPago          ?? '',
+      academicYear:         body.academicYear           ?? `${new Date().getFullYear()} / ${new Date().getFullYear() + 1}`,
+      fileName,
+      requestNumber:        body.requestNumber          ?? '',
+    };
 
-    // Obtener tokens en paralelo
-    const [dvToken, graphToken] = await Promise.all([
-      getAzureToken(`${process.env.DATAVERSE_URL!}/.default`),
-      getAzureToken('https://graph.microsoft.com/.default'),
-    ]);
+    if (pdfOmitted) {
+      // PDF no disponible: solo token de Graph, enviar email de aviso sin adjunto
+      const graphToken = await getAzureToken('https://graph.microsoft.com/.default');
+      await sendEmailNoPdf(graphToken, commonEmailData, body.pdfError ?? 'Error desconocido');
+    } else {
+      // Flujo normal: subir PDF a Dataverse y enviar email con adjunto
+      const fileBuffer = Buffer.from(contentBase64, 'base64');
+      const [dvToken, graphToken] = await Promise.all([
+        getAzureToken(`${process.env.DATAVERSE_URL!}/.default`),
+        getAzureToken('https://graph.microsoft.com/.default'),
+      ]);
 
-    // Subir PDF a Dataverse y enviar email en paralelo
-    await Promise.all([
-      uploadDataverseFile(dvToken, rowId, fileName, fileBuffer),
-      sendEmailWithPdf(graphToken, {
-        to:                 email,
-        nombre:             body.nombre             ?? '',
-        apellidos:          body.apellidos          ?? '',
-        dni:                body.dni                ?? '',
-        fechaNacimiento:    body.fechaNacimiento     ?? '',
-        domicilio:          body.domicilio           ?? '',
-        localidad:          body.localidad           ?? '',
-        provincia:          body.provincia           ?? '',
-        codigoPostal:       body.codigoPostal        ?? '',
-        telefono:           body.telefono            ?? '',
-        horaSalidaEstudios: body.horaSalidaEstudios  ?? '',
-        tipoCurso:          body.tipoCurso           ?? '',
-        especialidad:       body.especialidad        ?? '',
-        asignaturaPendiente1: body.asignaturaPendiente1 ?? '',
-        asignaturaPendiente2: body.asignaturaPendiente2 ?? '',
-        perfil:             body.perfil              ?? '',
-        formaPago:          body.formaPago           ?? '',
-        reduccion:          body.reduccion           ?? '',
-        importeTotal:       body.importeTotal        ?? '',
-        importe1erPago:     body.importe1erPago      ?? '',
-        importe2oPago:      body.importe2oPago       ?? '',
-        academicYear:       body.academicYear        ?? `${new Date().getFullYear()} / ${new Date().getFullYear() + 1}`,
-        fileName,
-        contentBase64,
-      }),
-    ]);
+      await Promise.all([
+        uploadDataverseFile(dvToken, rowId, fileName, fileBuffer),
+        sendEmailWithPdf(graphToken, { ...commonEmailData, contentBase64 }),
+      ]);
 
-    // Crear registros en cr955_matriculaasignatura (no bloquea si falla)
-    if (process.env.DATAVERSE_URL && process.env.DATAVERSE_TABLE_NAME) {
-      try {
-        await Promise.all([
-          createAsignaturaRecords(dvToken, rowId, asignaturasCursoActual, 'Ordinaria', nOrden),
-          createAsignaturaRecords(dvToken, rowId, asignaturasPendientes, 'Pendiente', nOrden),
-        ]);
-      } catch (asigErr) {
-        console.error('Error creando asignaturas en Dataverse (non-blocking):', asigErr);
+      // Crear registros de asignaturas (no bloquea si falla)
+      if (process.env.DATAVERSE_URL && process.env.DATAVERSE_TABLE_NAME) {
+        try {
+          await Promise.all([
+            createAsignaturaRecords(dvToken, rowId, asignaturasCursoActual, 'Ordinaria', nOrden),
+            createAsignaturaRecords(dvToken, rowId, asignaturasPendientes, 'Pendiente', nOrden),
+          ]);
+        } catch (asigErr) {
+          console.error('Error creando asignaturas en Dataverse (non-blocking):', asigErr);
+        }
       }
     }
 

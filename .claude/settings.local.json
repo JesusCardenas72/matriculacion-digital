@@ -28,7 +28,10 @@
       "Bash(dir \"C:\\\\Users\\\\halco\")",
       "Bash(dir \"C:\\\\Users\\\\halco\\\\Documents\")",
       "Bash(findstr -i \"matricul\")",
-      "Bash(python -c ':*)"
+      "Bash(python -c ':*)",
+      "Bash(git fetch *)",
+      "Bash(xargs grep -l \"Power Automate\\\\|Dataverse\\\\|upload-pdf\")",
+      "Bash(npm test *)"
     ]
   }
 }
