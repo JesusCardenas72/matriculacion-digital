@@ -335,7 +335,7 @@ const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asigna
             if (!allPendingFromLastCourse) {
               for (const m of asignaturasCursoActual) {
                 if (convAsigs.includes(m.MATERIA)) continue;
-                const isPerfil = PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
+                const isPerfil = showPerfil && PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
                 rows.push({ group: isPerfil ? 2 : 1, key: m.MATERIA, code: m.MATERIA, name: m.DESCRIPCION, tipo: isPerfil ? 'perfil' : 'matriculada' });
               }
             }

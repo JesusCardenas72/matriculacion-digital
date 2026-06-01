@@ -158,7 +158,7 @@ export const DatosMatriculacionSection: React.FC<DatosMatriculacionSectionProps>
                         const rows: SubjectRow[] = [];
                         for (const m of asignaturasCursoActual) {
                           const isConvalidada = convAsigs.includes(m.MATERIA);
-                          const isPerfil = !isConvalidada && PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
+                          const isPerfil = !isConvalidada && is5o6 && PROFILE_SPECIFIC_SUBJECTS.some(s => m.DESCRIPCION.toLowerCase().includes(s.toLowerCase()));
                           rows.push({ group: isConvalidada ? 4 : isPerfil ? 2 : 1, key: m.MATERIA, code: m.MATERIA, name: m.DESCRIPCION, tipo: isConvalidada ? 'convalidada' : isPerfil ? 'perfil' : 'matriculada' });
                         }
                         for (const m of selectedPendingSubjects) {
