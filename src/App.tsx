@@ -357,6 +357,60 @@ export default function App() {
     }
   }, [calculation]);
 
+  const requiredDocSections = useMemo(() => {
+    const sections: Array<{ title: string; items: string[] }> = [];
+    const totalImporte = calculation?.total ?? 0;
+
+    if ((formData.formaPago === 'unico' || formData.formaPago === 'fraccionado') && totalImporte > 0) {
+      sections.push({
+        title: 'Justificante de Pago de Tasas',
+        items: ['Justificante de pago de tasas mediante el Modelo 046']
+      });
+    }
+    if (formData.formaPago === 'beca') {
+      sections.push({
+        title: 'Solicitud de Beca',
+        items: ['Copia del PDF de la presentación de la solicitud de beca para el Conservatorio «Marcos Redondo»']
+      });
+    }
+    if (formData.tipoReduccion && formData.tipoReduccion !== 'ninguna') {
+      let docText = '';
+      if (formData.tipoReduccion === 'fam_num_general' || formData.tipoReduccion === 'fam_num_especial') {
+        docText = 'Carnet o Certificado que acredite la condición de Familia Numerosa General o Especial';
+      } else if (formData.tipoReduccion === 'discapacidad') {
+        docText = 'Certificado que acredite una discapacidad igual o superior al 33%';
+      } else if (formData.tipoReduccion === 'terrorismo') {
+        docText = 'Certificado que acredite la condición de víctima de terrorismo';
+      } else if (formData.tipoReduccion === 'violencia_genero') {
+        docText = 'Certificado que acredite la condición de víctima de violencia de género';
+      } else if (formData.tipoReduccion === 'ingreso_minimo') {
+        docText = 'Certificado de Ingreso Mínimo de Solidaridad';
+      }
+      if (docText) {
+        sections.push({ title: 'Reducción / Exención de Tasas', items: [docText] });
+      }
+    }
+    if (formData.convalidacionSolicitada && formData.convalidacionMotivo === 'eso_bach') {
+      sections.push({
+        title: 'Convalidación (ESO / Bachillerato)',
+        items: [
+          'Certificado Oficial Académico en el que aparezcan las asignaturas convalidables',
+          'O Certificado de Matriculación (en el caso de Simultaneidad)'
+        ]
+      });
+    }
+    return sections;
+  }, [formData.formaPago, formData.tipoReduccion, formData.convalidacionSolicitada, formData.convalidacionMotivo, calculation]);
+
+  const attachmentRequired = useMemo(() => {
+    const totalImporte = calculation?.total ?? 0;
+    return (
+      ((formData.formaPago === 'unico' || formData.formaPago === 'fraccionado') && totalImporte > 0) ||
+      formData.formaPago === 'beca' ||
+      (!!formData.tipoReduccion && formData.tipoReduccion !== 'ninguna')
+    );
+  }, [formData.formaPago, formData.tipoReduccion, calculation]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     let val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
@@ -1763,41 +1817,98 @@ export default function App() {
                         initial={{ opacity: 0, scale: 0.9, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl z-[150] border border-orange-100"
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl z-[150] border border-orange-100 max-h-[90vh] overflow-y-auto"
                       >
-                        <div className="flex items-center gap-3 mb-6">
-                          <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">
-                            <AlertCircle size={24} />
-                          </div>
-                          <h3 className="text-xl font-bold text-gray-900">Documentación necesaria</h3>
-                        </div>
-
-                        <div className="bg-orange-50 rounded-2xl p-6 mb-6">
-                          <p className="text-sm text-orange-900 font-medium leading-relaxed">
-                            RECUERDE: debe adjuntar la documentación necesaria para la matriculación que se le ha informado en los apartados anteriores (justificante de pago de tasas, DNI, tarjeta de familia numerosa, ...), sin esta documentación no podremos tramitar su solicitud.
-                          </p>
-                        </div>
-
-                        <div className="flex flex-col gap-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowReminderModal(false);
-                              setViewMode('readonly');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }}
-                            className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
-                          >
-                            Entendido, continuar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setShowReminderModal(false)}
-                            className="w-full py-4 bg-transparent text-gray-700 border-2 border-gray-200 rounded-xl font-bold uppercase tracking-widest hover:bg-gray-50 transition-all"
-                          >
-                            Volver
-                          </button>
-                        </div>
+                        {attachmentRequired && attachments.length === 0 ? (
+                          <>
+                            <div className="flex items-center gap-3 mb-6">
+                              <div className="p-2 bg-red-100 text-red-600 rounded-lg">
+                                <AlertCircle size={24} />
+                              </div>
+                              <h3 className="text-xl font-bold text-gray-900">Documentación obligatoria</h3>
+                            </div>
+                            <div className="bg-red-50 border border-red-200 rounded-2xl p-6 mb-6 space-y-4">
+                              <p className="text-sm font-bold text-red-900">
+                                No puede continuar sin adjuntar la documentación requerida:
+                              </p>
+                              {requiredDocSections.map((section, idx) => (
+                                <div key={idx}>
+                                  <p className="text-[11px] font-bold uppercase tracking-wider text-red-700 mb-1">{section.title}</p>
+                                  <ul className="space-y-1">
+                                    {section.items.map((item, iIdx) => (
+                                      <li key={iIdx} className="flex gap-2 text-sm text-red-800">
+                                        <span className="mt-0.5 shrink-0">•</span>
+                                        <span>{item}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ))}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowReminderModal(false)}
+                              className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
+                            >
+                              Volver y adjuntar documentación
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-3 mb-6">
+                              <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">
+                                <AlertCircle size={24} />
+                              </div>
+                              <h3 className="text-xl font-bold text-gray-900">Documentación necesaria</h3>
+                            </div>
+                            <div className="bg-orange-50 rounded-2xl p-6 mb-6 space-y-4">
+                              {requiredDocSections.length > 0 ? (
+                                <>
+                                  <p className="text-sm font-medium text-orange-900">
+                                    Verifique que ha adjuntado la documentación correcta:
+                                  </p>
+                                  {requiredDocSections.map((section, idx) => (
+                                    <div key={idx}>
+                                      <p className="text-[11px] font-bold uppercase tracking-wider text-orange-700 mb-1">{section.title}</p>
+                                      <ul className="space-y-1">
+                                        {section.items.map((item, iIdx) => (
+                                          <li key={iIdx} className="flex gap-2 text-sm text-orange-800">
+                                            <span className="mt-0.5 shrink-0">•</span>
+                                            <span>{item}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  ))}
+                                </>
+                              ) : (
+                                <p className="text-sm text-orange-900 font-medium leading-relaxed">
+                                  RECUERDE: verifique toda la información antes de continuar con el envío de la solicitud.
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowReminderModal(false);
+                                  setViewMode('readonly');
+                                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                                }}
+                                className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
+                              >
+                                Entendido, continuar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setShowReminderModal(false)}
+                                className="w-full py-4 bg-transparent text-gray-700 border-2 border-gray-200 rounded-xl font-bold uppercase tracking-widest hover:bg-gray-50 transition-all"
+                              >
+                                Volver
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </motion.div>
                     </>
                   )}
