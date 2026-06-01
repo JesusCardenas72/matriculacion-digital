@@ -140,7 +140,7 @@ export function validateTelefono(telefono: string): string | null {
 }
 
 export function sanitize(value: string): string {
-  return value.replace(/\s{2,}/g, ' ').trim();
+  return value.replace(/\s{2,}/g, ' ');
 }
 
 // Calcula el curso escolar al que pertenece la solicitud enviada hoy.
