@@ -518,8 +518,9 @@ export default function App() {
       const isImage = file.type.startsWith('image/');
       const isPdf = file.type === 'application/pdf';
       const extValid = validExtensions.test(file.name);
-      return (isImage || isPdf) && extValid;
+      return isImage || isPdf || extValid;
     });
+    const rejected = files.filter(f => !validFiles.includes(f));
     const currentTotal = attachments.reduce((sum, f) => sum + f.size, 0);
     const newTotal = validFiles.reduce((sum, f) => sum + f.size, currentTotal);
     if (newTotal > MAX_TOTAL_SIZE) {
@@ -529,8 +530,12 @@ export default function App() {
       return;
     }
     setAttachments(prev => [...prev, ...validFiles]);
-    if (validFiles.length < files.length) {
-      setValidationErrors([{ key: 'files', label: 'Algunos archivos han sido rechazados (formato no permitido).' }]);
+    if (rejected.length > 0) {
+      const names = rejected.map(f => `«${f.name}»`).join(', ');
+      setValidationErrors([{
+        key: 'files',
+        label: `Formato no permitido: ${names}. Solo se admiten archivos PDF (.pdf) o imágenes (.jpg, .jpeg, .png, .gif, .webp, .bmp). Renombra el archivo con la extensión correcta y vuelve a adjuntarlo.`,
+      }]);
       setShowValidationModal(true);
     }
     e.target.value = '';
@@ -639,7 +644,8 @@ export default function App() {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
     for (const file of attachments) {
-      if (file.type === 'application/pdf') {
+      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+      if (isPdf) {
         const buf = await file.arrayBuffer();
         let merged = false;
         try {
