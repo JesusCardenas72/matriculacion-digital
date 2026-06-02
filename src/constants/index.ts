@@ -139,8 +139,44 @@ export function validateTelefono(telefono: string): string | null {
   return null;
 }
 
+/**
+ * Lista CERRADA de campos del formulario en los que NO se permite ningún
+ * espacio en blanco mientras el usuario teclea (los espacios se eliminan
+ * en caliente). El resto de los campos DEBEN preservar exactamente lo que
+ * el usuario escribe — espacios incluidos.
+ *
+ * REGLA DE ORO: no añadir aquí ningún campo de texto libre (nombres,
+ * direcciones, motivos, observaciones, etc.). Cualquier cambio en esta
+ * lista debe ir acompañado de su test correspondiente.
+ */
+export const NO_WHITESPACE_FIELDS: readonly string[] = [
+  'dni',
+  'tutor1Dni',
+  'tutor2Dni',
+  'email',
+  'telefono',
+];
+
+/**
+ * Sanea el valor de un input *solo* si el campo no admite espacios.
+ * Para cualquier otro campo devuelve el valor sin tocar — esto es
+ * intencional para que el usuario pueda escribir libremente.
+ */
+export function sanitizeFieldValue(name: string, value: string): string {
+  if (NO_WHITESPACE_FIELDS.includes(name)) {
+    return value.replace(/\s+/g, '');
+  }
+  return value;
+}
+
+/**
+ * @deprecated Usa `sanitizeFieldValue(name, value)`. Esta función colapsaba
+ * espacios y se aplicaba indiscriminadamente, lo que rompía campos donde
+ * el usuario legítimamente teclea varios espacios. Se mantiene como
+ * passthrough para compatibilidad temporal.
+ */
 export function sanitize(value: string): string {
-  return value.replace(/\s{2,}/g, ' ');
+  return value;
 }
 
 // Calcula el curso escolar al que pertenece la solicitud enviada hoy.

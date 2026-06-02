@@ -11,6 +11,23 @@ Monorepo with three Vite React apps and a shared package. No workspace manager �
 | `plan-estudios` | `plan-estudios/` | 3002 | Study plan viewer |
 | `shared` | `shared/` | — | Types, fee logic, subject helpers (`@conservatorio/shared`) |
 
+## Whitespace policy en inputs (REGLA INMUTABLE)
+
+Solo los campos en `NO_WHITESPACE_FIELDS` (`src/constants/index.ts`) eliminan
+espacios: **DNI, tutor1Dni, tutor2Dni, email, telefono**. Cualquier otro campo
+de texto del formulario **debe preservar literalmente** lo que el usuario teclee
+(espacios dobles, iniciales y finales incluidos).
+
+- El saneado vive en una sola función: `sanitizeFieldValue(name, value)`.
+- `handleChange` en `src/App.tsx` la usa para TODOS los campos string.
+- No añadir `.trim()`, `.replace(/\s+/g, '')`, `.replace(/\s{2,}/g, ' ')` ni
+  similares en el flujo de teclado de campos de texto libre.
+- Si necesitas añadir un campo sin espacios, edítalo en `NO_WHITESPACE_FIELDS`
+  y añade su test correspondiente en `src/__tests__/whitespace.test.ts`.
+- El test de regresión `src/__tests__/whitespace.test.ts` se romperá si vuelve
+  a colarse un colapso global de espacios — NO lo arregles añadiendo campos a
+  la lista, arregla el código que rompió la regla.
+
 ## Daily Commands
 
 ```bash

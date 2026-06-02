@@ -10,11 +10,28 @@ import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, File
 import { motion, AnimatePresence } from 'motion/react';
 const loadPdfModule = () => import('@react-pdf/renderer');
 const loadPdfLib = () => import('pdf-lib');
+const loadPdfJs = async () => {
+  const pdfjs = await import('pdfjs-dist');
+  if (!pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
+    try {
+      // El worker se inlinea en el bundle (compatible con vite-plugin-singlefile)
+      const PdfWorker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?worker&inline')).default;
+      pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
+    } catch {
+      // Fallback: que pdfjs cree el worker por su cuenta a partir de un URL conocido
+      try {
+        const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+      } catch { /* sin worker: pdfjs intentará el modo fake worker */ }
+    }
+  }
+  return pdfjs;
+};
 import { MatriculaPdf } from './MatriculaPdf';
 import { TutorialPdf } from './TutorialPdf';
 import logoCpm from './assets/logo_cpm.png';
 import logoJccm from './assets/logo_jccm.png';
-import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, validateDNI, validateEmail, validateCP, validateTelefono, sanitize, calcularCursoEscolar } from './constants';
+import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, validateDNI, validateEmail, validateCP, validateTelefono, sanitizeFieldValue, calcularCursoEscolar } from './constants';
 import { getCurrentCalendarYear } from './config/academicYear';
 import { useAcademicYear } from './hooks/useAcademicYear';
 
@@ -69,6 +86,7 @@ export default function App() {
   const [validationErrors, setValidationErrors] = useState<{ key: string; label: string }[]>([]);
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
+  const [encryptedPdfNames, setEncryptedPdfNames] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'form' | 'readonly'>('form');
   const [isConvalidacionModalOpen, setIsConvalidacionModalOpen] = useState(false);
   const [isConvalidacionSubjectModalOpen, setIsConvalidacionSubjectModalOpen] = useState(false);
@@ -414,12 +432,12 @@ export default function App() {
     const { name, value, type } = e.target;
     let val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
     
+    // Política de espacios: el saneado vive en sanitizeFieldValue y SOLO
+    // afecta a campos sin espacios (DNI, email, teléfono). Los demás campos
+    // preservan literalmente lo que el usuario teclea — incluidos espacios
+    // dobles, iniciales y finales. Ver tests en src/__tests__/whitespace.test.ts.
     if (typeof val === 'string') {
-      if (name === 'tutor1Nombre' || name === 'tutor2Nombre') {
-        val = val.replace(/\s{2,}/g, ' ');
-      } else {
-        val = sanitize(val);
-      }
+      val = sanitizeFieldValue(name, val);
     }
 
     if (name === 'formaPago' && (val === 'unico' || val === 'fraccionado')) {
@@ -510,6 +528,41 @@ export default function App() {
     </div>
   );
 
+  // ── helper: detecta si un PDF esta cifrado con contraseña real (no se puede
+  // renderizar sin la clave). PDF.js lanza PasswordException en ese caso. ──
+  const _isPasswordEncryptedPdf = async (file: File): Promise<boolean> => {
+    try {
+      const pdfjs = await loadPdfJs();
+      const buf = await file.arrayBuffer();
+      const task = pdfjs.getDocument({ data: new Uint8Array(buf), password: '' });
+      try {
+        const doc = await task.promise;
+        await doc.destroy();
+        return false;
+      } catch (err: unknown) {
+        // pdfjs PasswordException tiene name === 'PasswordException'
+        if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'PasswordException') {
+          return true;
+        }
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  };
+
+  const _scanForEncryptedPdfs = async (files: File[]) => {
+    const found: string[] = [];
+    for (const f of files) {
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+      if (!isPdf) continue;
+      if (await _isPasswordEncryptedPdf(f)) found.push(f.name);
+    }
+    if (found.length > 0) {
+      setEncryptedPdfNames(prev => Array.from(new Set([...prev, ...found])));
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files: File[] = e.target.files ? Array.from(e.target.files) : [];
     const validExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|pdf)$/i;
@@ -518,8 +571,9 @@ export default function App() {
       const isImage = file.type.startsWith('image/');
       const isPdf = file.type === 'application/pdf';
       const extValid = validExtensions.test(file.name);
-      return (isImage || isPdf) && extValid;
+      return isImage || isPdf || extValid;
     });
+    const rejected = files.filter(f => !validFiles.includes(f));
     const currentTotal = attachments.reduce((sum, f) => sum + f.size, 0);
     const newTotal = validFiles.reduce((sum, f) => sum + f.size, currentTotal);
     if (newTotal > MAX_TOTAL_SIZE) {
@@ -529,15 +583,27 @@ export default function App() {
       return;
     }
     setAttachments(prev => [...prev, ...validFiles]);
-    if (validFiles.length < files.length) {
-      setValidationErrors([{ key: 'files', label: 'Algunos archivos han sido rechazados (formato no permitido).' }]);
+    // Detecta PDFs cifrados con contraseña real (no bloquea: solo informa)
+    void _scanForEncryptedPdfs(validFiles);
+    if (rejected.length > 0) {
+      const names = rejected.map(f => `«${f.name}»`).join(', ');
+      setValidationErrors([{
+        key: 'files',
+        label: `Formato no permitido: ${names}. Solo se admiten archivos PDF (.pdf) o imágenes (.jpg, .jpeg, .png, .gif, .webp, .bmp). Renombra el archivo con la extensión correcta y vuelve a adjuntarlo.`,
+      }]);
       setShowValidationModal(true);
     }
     e.target.value = '';
   };
 
   const handleRemoveAttachment = (index: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
+    setAttachments(prev => {
+      const removed = prev[index];
+      if (removed) {
+        setEncryptedPdfNames(names => names.filter(n => n !== removed.name));
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -607,6 +673,35 @@ export default function App() {
       img.onerror = reject; img.src = url;
     });
 
+  // ── helper: rasteriza un PDF (firmado/encriptado/no incrustable) a PNGs página a página ──
+  const _rasterizePdfToPngs = async (buf: ArrayBuffer): Promise<Uint8Array[]> => {
+    const pdfjs = await loadPdfJs();
+    const doc = await pdfjs.getDocument({
+      data: new Uint8Array(buf),
+      isEvalSupported: false,
+      password: '',
+    }).promise;
+    const out: Uint8Array[] = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const viewport = page.getViewport({ scale: 2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D no disponible');
+      // @ts-expect-error - canvas option name varies between pdfjs versions
+      await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      const blob: Blob = await new Promise((res, rej) =>
+        canvas.toBlob(b => (b ? res(b) : rej(new Error('toBlob falló'))), 'image/png')
+      );
+      out.push(new Uint8Array(await blob.arrayBuffer()));
+      page.cleanup();
+    }
+    await doc.destroy();
+    return out;
+  };
+
   // ── helper: build the final merged PDF (page 1 = form, rest = attachments) ──
   const buildPdfBytes = async (ts: Date, reqNum: string | null): Promise<{ bytes: Uint8Array; filename: string }> => {
     const { pdf } = await loadPdfModule();
@@ -639,19 +734,83 @@ export default function App() {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
     for (const file of attachments) {
-      if (file.type === 'application/pdf') {
-        const srcDoc = await PDFDocument.load(await file.arrayBuffer());
-        const copied = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
-        copied.forEach(pg => pdfDoc.addPage(pg));
-      } else if (file.type.startsWith('image/')) {
-        const embImg = file.type === 'image/jpeg'
-          ? await pdfDoc.embedJpg(await file.arrayBuffer())
-          : await pdfDoc.embedPng(await _imageToPngBytes(file));
-        const { width: iW, height: iH } = embImg;
-        const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
+      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+      if (isPdf) {
+        const buf = await file.arrayBuffer();
+        let merged = false;
+        try {
+          const srcDoc = await PDFDocument.load(buf, { ignoreEncryption: true });
+          const copied = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+          copied.forEach(pg => pdfDoc.addPage(pg));
+          merged = true;
+        } catch {
+          // PDF firmado/encriptado o no incrustable: lo adjuntamos en bruto al PDF resultante
+        }
+        if (!merged) {
+          // Intento 2: rasterizar con PDF.js (sirve para firmados y para
+          // "encriptados" sin contraseña real, p.ej. con restricciones de propietario)
+          try {
+            const pngs = await _rasterizePdfToPngs(buf);
+            for (const png of pngs) {
+              const embImg = await pdfDoc.embedPng(png);
+              const { width: iW, height: iH } = embImg;
+              const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
+              const pg = pdfDoc.addPage([A4W, A4H]);
+              pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
+              pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+            }
+            merged = true;
+          } catch {
+            // PDF protegido con contraseña real u otro fallo: caemos al adjunto embebido
+          }
+        }
+        if (!merged) {
+          try {
+            await pdfDoc.attach(new Uint8Array(buf), file.name, {
+              mimeType: 'application/pdf',
+              description: 'Documento adjuntado por el solicitante (firmado/protegido)',
+            });
+          } catch {
+            // Si ni attach funciona, seguimos sin bloquear el envío
+          }
+          const pg = pdfDoc.addPage([A4W, A4H]);
+          pg.drawText('Documento adjunto', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
+          pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
+          pg.drawText('Este PDF está protegido con contraseña y se incluye como archivo', { x: 40, y: A4H - 140, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+          pg.drawText('adjunto embebido dentro de esta solicitud.', { x: 40, y: A4H - 154, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+        }
+      } else if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(file.name)) {
+        try {
+          const isJpeg = file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name);
+          const embImg = isJpeg
+            ? await pdfDoc.embedJpg(await file.arrayBuffer())
+            : await pdfDoc.embedPng(await _imageToPngBytes(file));
+          const { width: iW, height: iH } = embImg;
+          const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
+          const pg = pdfDoc.addPage([A4W, A4H]);
+          pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
+          pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+        } catch {
+          try {
+            await pdfDoc.attach(new Uint8Array(await file.arrayBuffer()), file.name, {
+              mimeType: file.type || 'application/octet-stream',
+              description: 'Imagen adjuntada por el solicitante',
+            });
+          } catch { /* noop */ }
+          const pg = pdfDoc.addPage([A4W, A4H]);
+          pg.drawText('Imagen adjunta', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
+          pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
+        }
+      } else {
+        try {
+          await pdfDoc.attach(new Uint8Array(await file.arrayBuffer()), file.name, {
+            mimeType: file.type || 'application/octet-stream',
+            description: 'Documento adjuntado por el solicitante',
+          });
+        } catch { /* noop */ }
         const pg = pdfDoc.addPage([A4W, A4H]);
-        pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
-        pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+        pg.drawText('Documento adjunto', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
+        pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
       }
     }
 
@@ -663,25 +822,15 @@ export default function App() {
   // Si un adjunto es ilegible, aborta con un mensaje claro y SIN dejar registro huérfano. ──
   const validateAttachments = async (): Promise<void> => {
     if (attachments.length === 0) return;
-    const { PDFDocument } = await loadPdfLib();
     for (const file of attachments) {
-      if (file.type === 'application/pdf') {
-        try {
-          await PDFDocument.load(await file.arrayBuffer());
-        } catch {
-          throw new Error(`No se pudo leer el PDF adjunto «${file.name}». Si está protegido con contraseña, desbloquéalo y vuelve a adjuntarlo.`);
+      try {
+        const buf = await file.arrayBuffer();
+        if (buf.byteLength === 0) {
+          throw new Error(`El archivo «${file.name}» está vacío.`);
         }
-      } else if (file.type.startsWith('image/')) {
-        try {
-          const probe = await PDFDocument.create();
-          if (file.type === 'image/jpeg') {
-            await probe.embedJpg(await file.arrayBuffer());
-          } else {
-            await probe.embedPng(await _imageToPngBytes(file));
-          }
-        } catch {
-          throw new Error(`No se pudo procesar la imagen «${file.name}». Conviértela a JPG o PNG e inténtalo de nuevo.`);
-        }
+      } catch (e) {
+        if (e instanceof Error) throw e;
+        throw new Error(`No se pudo leer el archivo «${file.name}».`);
       }
     }
   };
@@ -912,7 +1061,10 @@ export default function App() {
       URL.revokeObjectURL(downloadUrl);
 
       setSubmitStatus('success');
-      if (!alreadySubmitted) setAttachments([]);
+      if (!alreadySubmitted) {
+        setAttachments([]);
+        setEncryptedPdfNames([]);
+      }
     } catch (error) {
       console.error(error);
       setSubmitError(error instanceof Error ? error.message : 'Error desconocido');
@@ -953,6 +1105,7 @@ export default function App() {
                 setSubmitTimestamp(null);
                 setRequestNumber(null);
                 setAttachments([]);
+                setEncryptedPdfNames([]);
                 setValidationErrors([]);
                 setFormData({
                   nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: '', convalidacionSolicitada: false, convalidacionAsignaturas: [], convalidacionMotivo: '',
@@ -1793,6 +1946,67 @@ export default function App() {
                         <button
                           type="button"
                           onClick={handleValidationClose}
+                          className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
+                        >
+                          Entendido
+                        </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {encryptedPdfNames.length > 0 && (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setEncryptedPdfNames([])}
+                        className="fixed inset-0 bg-black/40 backdrop-blur-md z-[125]"
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl z-[135] border border-amber-100"
+                      >
+                        <div className="flex items-center gap-3 mb-5">
+                          <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
+                            <AlertCircle size={24} />
+                          </div>
+                          <h3 className="text-xl font-bold text-gray-900">PDF cifrado detectado</h3>
+                        </div>
+
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-5 space-y-3">
+                          <p className="text-sm text-amber-900 font-medium">
+                            No se puede enviar el siguiente documento PDF por estar cifrado con contraseña:
+                          </p>
+                          <ul className="space-y-1">
+                            {encryptedPdfNames.map((n, i) => (
+                              <li key={i} className="text-sm text-amber-900 flex items-start gap-2">
+                                <span className="mt-0.5 shrink-0">•</span>
+                                <span className="font-semibold break-all">{n}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="text-sm text-amber-900">
+                            Por favor, envíelo por correo electrónico a la secretaría del centro:
+                          </p>
+                          <a
+                            href={`mailto:13004341.cpm@educastillalamancha.es?subject=${encodeURIComponent('Documento PDF cifrado — solicitud de matrícula')}`}
+                            className="inline-block text-sm font-bold text-blue-700 underline underline-offset-2 break-all hover:text-blue-900"
+                          >
+                            13004341.cpm@educastillalamancha.es
+                          </a>
+                          <p className="text-xs text-amber-800">
+                            La solicitud se enviará igualmente; el PDF cifrado aparecerá como página informativa dentro del documento generado.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setEncryptedPdfNames([])}
                           className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
                         >
                           Entendido
