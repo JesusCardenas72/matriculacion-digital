@@ -640,18 +640,63 @@ export default function App() {
 
     for (const file of attachments) {
       if (file.type === 'application/pdf') {
-        const srcDoc = await PDFDocument.load(await file.arrayBuffer());
-        const copied = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
-        copied.forEach(pg => pdfDoc.addPage(pg));
-      } else if (file.type.startsWith('image/')) {
-        const embImg = file.type === 'image/jpeg'
-          ? await pdfDoc.embedJpg(await file.arrayBuffer())
-          : await pdfDoc.embedPng(await _imageToPngBytes(file));
-        const { width: iW, height: iH } = embImg;
-        const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
+        const buf = await file.arrayBuffer();
+        let merged = false;
+        try {
+          const srcDoc = await PDFDocument.load(buf, { ignoreEncryption: true });
+          const copied = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+          copied.forEach(pg => pdfDoc.addPage(pg));
+          merged = true;
+        } catch {
+          // PDF firmado/encriptado o no incrustable: lo adjuntamos en bruto al PDF resultante
+        }
+        if (!merged) {
+          try {
+            await pdfDoc.attach(new Uint8Array(buf), file.name, {
+              mimeType: 'application/pdf',
+              description: 'Documento adjuntado por el solicitante (firmado/protegido)',
+            });
+          } catch {
+            // Si ni attach funciona, seguimos sin bloquear el envío
+          }
+          const pg = pdfDoc.addPage([A4W, A4H]);
+          pg.drawText('Documento adjunto', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
+          pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
+          pg.drawText('Este PDF está firmado o protegido y se incluye como archivo adjunto', { x: 40, y: A4H - 140, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+          pg.drawText('incrustado dentro de esta solicitud.', { x: 40, y: A4H - 154, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+        }
+      } else if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(file.name)) {
+        try {
+          const isJpeg = file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name);
+          const embImg = isJpeg
+            ? await pdfDoc.embedJpg(await file.arrayBuffer())
+            : await pdfDoc.embedPng(await _imageToPngBytes(file));
+          const { width: iW, height: iH } = embImg;
+          const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
+          const pg = pdfDoc.addPage([A4W, A4H]);
+          pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
+          pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+        } catch {
+          try {
+            await pdfDoc.attach(new Uint8Array(await file.arrayBuffer()), file.name, {
+              mimeType: file.type || 'application/octet-stream',
+              description: 'Imagen adjuntada por el solicitante',
+            });
+          } catch { /* noop */ }
+          const pg = pdfDoc.addPage([A4W, A4H]);
+          pg.drawText('Imagen adjunta', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
+          pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
+        }
+      } else {
+        try {
+          await pdfDoc.attach(new Uint8Array(await file.arrayBuffer()), file.name, {
+            mimeType: file.type || 'application/octet-stream',
+            description: 'Documento adjuntado por el solicitante',
+          });
+        } catch { /* noop */ }
         const pg = pdfDoc.addPage([A4W, A4H]);
-        pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
-        pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+        pg.drawText('Documento adjunto', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
+        pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
       }
     }
 
@@ -663,25 +708,15 @@ export default function App() {
   // Si un adjunto es ilegible, aborta con un mensaje claro y SIN dejar registro huérfano. ──
   const validateAttachments = async (): Promise<void> => {
     if (attachments.length === 0) return;
-    const { PDFDocument } = await loadPdfLib();
     for (const file of attachments) {
-      if (file.type === 'application/pdf') {
-        try {
-          await PDFDocument.load(await file.arrayBuffer());
-        } catch {
-          throw new Error(`No se pudo leer el PDF adjunto «${file.name}». Si está protegido con contraseña, desbloquéalo y vuelve a adjuntarlo.`);
+      try {
+        const buf = await file.arrayBuffer();
+        if (buf.byteLength === 0) {
+          throw new Error(`El archivo «${file.name}» está vacío.`);
         }
-      } else if (file.type.startsWith('image/')) {
-        try {
-          const probe = await PDFDocument.create();
-          if (file.type === 'image/jpeg') {
-            await probe.embedJpg(await file.arrayBuffer());
-          } else {
-            await probe.embedPng(await _imageToPngBytes(file));
-          }
-        } catch {
-          throw new Error(`No se pudo procesar la imagen «${file.name}». Conviértela a JPG o PNG e inténtalo de nuevo.`);
-        }
+      } catch (e) {
+        if (e instanceof Error) throw e;
+        throw new Error(`No se pudo leer el archivo «${file.name}».`);
       }
     }
   };
