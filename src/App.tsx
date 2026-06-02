@@ -86,6 +86,7 @@ export default function App() {
   const [validationErrors, setValidationErrors] = useState<{ key: string; label: string }[]>([]);
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
+  const [encryptedPdfNames, setEncryptedPdfNames] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'form' | 'readonly'>('form');
   const [isConvalidacionModalOpen, setIsConvalidacionModalOpen] = useState(false);
   const [isConvalidacionSubjectModalOpen, setIsConvalidacionSubjectModalOpen] = useState(false);
@@ -527,6 +528,41 @@ export default function App() {
     </div>
   );
 
+  // ── helper: detecta si un PDF esta cifrado con contraseña real (no se puede
+  // renderizar sin la clave). PDF.js lanza PasswordException en ese caso. ──
+  const _isPasswordEncryptedPdf = async (file: File): Promise<boolean> => {
+    try {
+      const pdfjs = await loadPdfJs();
+      const buf = await file.arrayBuffer();
+      const task = pdfjs.getDocument({ data: new Uint8Array(buf), password: '' });
+      try {
+        const doc = await task.promise;
+        await doc.destroy();
+        return false;
+      } catch (err: unknown) {
+        // pdfjs PasswordException tiene name === 'PasswordException'
+        if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'PasswordException') {
+          return true;
+        }
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  };
+
+  const _scanForEncryptedPdfs = async (files: File[]) => {
+    const found: string[] = [];
+    for (const f of files) {
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+      if (!isPdf) continue;
+      if (await _isPasswordEncryptedPdf(f)) found.push(f.name);
+    }
+    if (found.length > 0) {
+      setEncryptedPdfNames(prev => Array.from(new Set([...prev, ...found])));
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files: File[] = e.target.files ? Array.from(e.target.files) : [];
     const validExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|pdf)$/i;
@@ -547,6 +583,8 @@ export default function App() {
       return;
     }
     setAttachments(prev => [...prev, ...validFiles]);
+    // Detecta PDFs cifrados con contraseña real (no bloquea: solo informa)
+    void _scanForEncryptedPdfs(validFiles);
     if (rejected.length > 0) {
       const names = rejected.map(f => `«${f.name}»`).join(', ');
       setValidationErrors([{
@@ -559,7 +597,13 @@ export default function App() {
   };
 
   const handleRemoveAttachment = (index: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
+    setAttachments(prev => {
+      const removed = prev[index];
+      if (removed) {
+        setEncryptedPdfNames(names => names.filter(n => n !== removed.name));
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1017,7 +1061,10 @@ export default function App() {
       URL.revokeObjectURL(downloadUrl);
 
       setSubmitStatus('success');
-      if (!alreadySubmitted) setAttachments([]);
+      if (!alreadySubmitted) {
+        setAttachments([]);
+        setEncryptedPdfNames([]);
+      }
     } catch (error) {
       console.error(error);
       setSubmitError(error instanceof Error ? error.message : 'Error desconocido');
@@ -1058,6 +1105,7 @@ export default function App() {
                 setSubmitTimestamp(null);
                 setRequestNumber(null);
                 setAttachments([]);
+                setEncryptedPdfNames([]);
                 setValidationErrors([]);
                 setFormData({
                   nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: '', convalidacionSolicitada: false, convalidacionAsignaturas: [], convalidacionMotivo: '',
@@ -1898,6 +1946,67 @@ export default function App() {
                         <button
                           type="button"
                           onClick={handleValidationClose}
+                          className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
+                        >
+                          Entendido
+                        </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {encryptedPdfNames.length > 0 && (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setEncryptedPdfNames([])}
+                        className="fixed inset-0 bg-black/40 backdrop-blur-md z-[125]"
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl z-[135] border border-amber-100"
+                      >
+                        <div className="flex items-center gap-3 mb-5">
+                          <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
+                            <AlertCircle size={24} />
+                          </div>
+                          <h3 className="text-xl font-bold text-gray-900">PDF cifrado detectado</h3>
+                        </div>
+
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-5 space-y-3">
+                          <p className="text-sm text-amber-900 font-medium">
+                            No se puede enviar el siguiente documento PDF por estar cifrado con contraseña:
+                          </p>
+                          <ul className="space-y-1">
+                            {encryptedPdfNames.map((n, i) => (
+                              <li key={i} className="text-sm text-amber-900 flex items-start gap-2">
+                                <span className="mt-0.5 shrink-0">•</span>
+                                <span className="font-semibold break-all">{n}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="text-sm text-amber-900">
+                            Por favor, envíelo por correo electrónico a la secretaría del centro:
+                          </p>
+                          <a
+                            href={`mailto:13004341.cpm@educastillalamancha.es?subject=${encodeURIComponent('Documento PDF cifrado — solicitud de matrícula')}`}
+                            className="inline-block text-sm font-bold text-blue-700 underline underline-offset-2 break-all hover:text-blue-900"
+                          >
+                            13004341.cpm@educastillalamancha.es
+                          </a>
+                          <p className="text-xs text-amber-800">
+                            La solicitud se enviará igualmente; el PDF cifrado aparecerá como página informativa dentro del documento generado.
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setEncryptedPdfNames([])}
                           className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
                         >
                           Entendido
