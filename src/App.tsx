@@ -87,6 +87,13 @@ export default function App() {
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [encryptedPdfNames, setEncryptedPdfNames] = useState<string[]>([]);
+  // Contraseñas validadas por nombre de archivo (PDFs desbloqueados por el usuario)
+  const [pdfPasswords, setPdfPasswords] = useState<Record<string, string>>({});
+  // Valor escrito en cada campo de contraseña del modal (por nombre de archivo)
+  const [pwInputs, setPwInputs] = useState<Record<string, string>>({});
+  // Mensaje de error/estado por archivo al intentar desbloquear
+  const [pwErrors, setPwErrors] = useState<Record<string, string>>({});
+  const [pwBusy, setPwBusy] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'form' | 'readonly'>('form');
   const [isConvalidacionModalOpen, setIsConvalidacionModalOpen] = useState(false);
   const [isConvalidacionSubjectModalOpen, setIsConvalidacionSubjectModalOpen] = useState(false);
@@ -563,6 +570,33 @@ export default function App() {
     }
   };
 
+  // Intenta abrir el PDF con la contraseña indicada. Si es correcta, la guarda y
+  // retira el archivo de la lista de cifrados (quedará apto para rasterizarse).
+  const _tryUnlockPdf = async (name: string) => {
+    const file = attachments.find(f => f.name === name);
+    const password = pwInputs[name] ?? '';
+    if (!file || !password) {
+      setPwErrors(prev => ({ ...prev, [name]: 'Introduce la contraseña del documento.' }));
+      return;
+    }
+    setPwBusy(name);
+    try {
+      const pdfjs = await loadPdfJs();
+      const buf = await file.arrayBuffer();
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), password }).promise;
+      await doc.destroy();
+      setPdfPasswords(prev => ({ ...prev, [name]: password }));
+      setEncryptedPdfNames(prev => prev.filter(n => n !== name));
+      setPwErrors(prev => { const c = { ...prev }; delete c[name]; return c; });
+      setPwInputs(prev => { const c = { ...prev }; delete c[name]; return c; });
+    } catch (err: unknown) {
+      const isPw = err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'PasswordException';
+      setPwErrors(prev => ({ ...prev, [name]: isPw ? 'Contraseña incorrecta. Inténtalo de nuevo.' : 'No se pudo abrir el documento.' }));
+    } finally {
+      setPwBusy(null);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files: File[] = e.target.files ? Array.from(e.target.files) : [];
     const validExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|pdf)$/i;
@@ -601,6 +635,9 @@ export default function App() {
       const removed = prev[index];
       if (removed) {
         setEncryptedPdfNames(names => names.filter(n => n !== removed.name));
+        setPdfPasswords(p => { const c = { ...p }; delete c[removed.name]; return c; });
+        setPwInputs(p => { const c = { ...p }; delete c[removed.name]; return c; });
+        setPwErrors(p => { const c = { ...p }; delete c[removed.name]; return c; });
       }
       return prev.filter((_, i) => i !== index);
     });
@@ -674,14 +711,27 @@ export default function App() {
     });
 
   // ── helper: rasteriza un PDF (firmado/encriptado/no incrustable) a PNGs página a página ──
-  const _rasterizePdfToPngs = async (buf: ArrayBuffer): Promise<Uint8Array[]> => {
+  // pdf.js pinta el fondo a blanco (#ffffff) antes de dibujar el contenido de la
+  // página. Si tras renderizar no queda ningún píxel no-blanco, esa página se
+  // rasterizó vacía. Una página suelta en blanco es legítima (suele venir así en
+  // el origen) y se conserva; solo si TODAS salen vacías estamos ante el caso XFA
+  // (administración), cuyo contenido vive en una capa aparte y nunca se pinta.
+  const _isCanvasBlank = (ctx: CanvasRenderingContext2D, w: number, h: number): boolean => {
+    const { data } = ctx.getImageData(0, 0, w, h);
+    for (let i = 0; i < data.length; i += 16) { // muestreo 1 de cada 4 píxeles
+      if (data[i] < 250 || data[i + 1] < 250 || data[i + 2] < 250) return false;
+    }
+    return true;
+  };
+
+  const _rasterizePdfToPngs = async (buf: ArrayBuffer, password = ''): Promise<Uint8Array[]> => {
     const pdfjs = await loadPdfJs();
     const doc = await pdfjs.getDocument({
       data: new Uint8Array(buf),
-      isEvalSupported: false,
-      password: '',
+      password,
     }).promise;
     const out: Uint8Array[] = [];
+    let blankPages = 0;
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i);
       const viewport = page.getViewport({ scale: 2 });
@@ -690,8 +740,8 @@ export default function App() {
       canvas.height = Math.ceil(viewport.height);
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('Canvas 2D no disponible');
-      // @ts-expect-error - canvas option name varies between pdfjs versions
-      await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      await page.render({ canvasContext: ctx, viewport, canvas: null }).promise;
+      if (_isCanvasBlank(ctx, canvas.width, canvas.height)) blankPages++;
       const blob: Blob = await new Promise((res, rej) =>
         canvas.toBlob(b => (b ? res(b) : rej(new Error('toBlob falló'))), 'image/png')
       );
@@ -699,6 +749,12 @@ export default function App() {
       page.cleanup();
     }
     await doc.destroy();
+    if (out.length > 0 && blankPages === out.length) {
+      // Todas las páginas se rasterizaron vacías (p.ej. PDF XFA): abortamos para
+      // que el adjunto caiga al nivel 3 (archivo embebido) en vez de insertar
+      // páginas en blanco. Una o varias páginas vacías sueltas sí se conservan.
+      throw new Error('Rasterizado en blanco en todas las páginas (posible PDF XFA)');
+    }
     return out;
   };
 
@@ -740,6 +796,11 @@ export default function App() {
         let merged = false;
         try {
           const srcDoc = await PDFDocument.load(buf, { ignoreEncryption: true });
+          // `ignoreEncryption` solo evita el error de contraseña: NO descifra los
+          // streams. Si copiáramos sus páginas, pdf-lib trasladaría los bytes aún
+          // cifrados y se verían en blanco. Forzamos el rasterizado con pdf.js
+          // (intento 2), que sí descifra los PDFs con restricción de propietario.
+          if (srcDoc.isEncrypted) throw new Error('PDF cifrado: no apto para copyPages');
           const copied = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
           copied.forEach(pg => pdfDoc.addPage(pg));
           merged = true;
@@ -750,7 +811,7 @@ export default function App() {
           // Intento 2: rasterizar con PDF.js (sirve para firmados y para
           // "encriptados" sin contraseña real, p.ej. con restricciones de propietario)
           try {
-            const pngs = await _rasterizePdfToPngs(buf);
+            const pngs = await _rasterizePdfToPngs(buf, pdfPasswords[file.name] ?? '');
             for (const png of pngs) {
               const embImg = await pdfDoc.embedPng(png);
               const { width: iW, height: iH } = embImg;
@@ -1975,32 +2036,48 @@ export default function App() {
                           <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
                             <AlertCircle size={24} />
                           </div>
-                          <h3 className="text-xl font-bold text-gray-900">PDF cifrado detectado</h3>
+                          <h3 className="text-xl font-bold text-gray-900">Documento protegido con contraseña</h3>
                         </div>
 
-                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-5 space-y-3">
+                        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-5 space-y-4">
                           <p className="text-sm text-amber-900 font-medium">
-                            No se puede enviar el siguiente documento PDF por estar cifrado con contraseña:
+                            Por razones de seguridad, el sistema no admite PDF protegidos con contraseña. La única
+                            forma de incluir el documento es introducir su contraseña para desbloquearlo:
                           </p>
-                          <ul className="space-y-1">
+                          <ul className="space-y-4">
                             {encryptedPdfNames.map((n, i) => (
-                              <li key={i} className="text-sm text-amber-900 flex items-start gap-2">
-                                <span className="mt-0.5 shrink-0">•</span>
-                                <span className="font-semibold break-all">{n}</span>
+                              <li key={i} className="space-y-2">
+                                <div className="text-sm text-amber-900 flex items-start gap-2">
+                                  <span className="mt-0.5 shrink-0">•</span>
+                                  <span className="font-semibold break-all">{n}</span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="password"
+                                    value={pwInputs[n] ?? ''}
+                                    placeholder="Contraseña del documento"
+                                    onChange={e => setPwInputs(prev => ({ ...prev, [n]: e.target.value }))}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void _tryUnlockPdf(n); } }}
+                                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-amber-300 bg-white text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={pwBusy === n}
+                                    onClick={() => void _tryUnlockPdf(n)}
+                                    className="shrink-0 px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-bold hover:bg-amber-700 disabled:opacity-60 transition-colors"
+                                  >
+                                    {pwBusy === n ? 'Comprobando…' : 'Desbloquear'}
+                                  </button>
+                                </div>
+                                {pwErrors[n] && (
+                                  <p className="text-xs text-red-700 font-medium">{pwErrors[n]}</p>
+                                )}
                               </li>
                             ))}
                           </ul>
-                          <p className="text-sm text-amber-900">
-                            Por favor, envíelo por correo electrónico a la secretaría del centro:
-                          </p>
-                          <a
-                            href={`mailto:13004341.cpm@educastillalamancha.es?subject=${encodeURIComponent('Documento PDF cifrado — solicitud de matrícula')}`}
-                            className="inline-block text-sm font-bold text-blue-700 underline underline-offset-2 break-all hover:text-blue-900"
-                          >
-                            13004341.cpm@educastillalamancha.es
-                          </a>
                           <p className="text-xs text-amber-800">
-                            La solicitud se enviará igualmente; el PDF cifrado aparecerá como página informativa dentro del documento generado.
+                            Si no introduce la contraseña, la solicitud se enviará igualmente, pero ese PDF
+                            aparecerá solo como página informativa dentro del documento generado.
                           </p>
                         </div>
 
