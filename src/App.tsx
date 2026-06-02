@@ -31,7 +31,7 @@ import { MatriculaPdf } from './MatriculaPdf';
 import { TutorialPdf } from './TutorialPdf';
 import logoCpm from './assets/logo_cpm.png';
 import logoJccm from './assets/logo_jccm.png';
-import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, validateDNI, validateEmail, validateCP, validateTelefono, sanitize, calcularCursoEscolar } from './constants';
+import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, validateDNI, validateEmail, validateCP, validateTelefono, sanitizeFieldValue, calcularCursoEscolar } from './constants';
 import { getCurrentCalendarYear } from './config/academicYear';
 import { useAcademicYear } from './hooks/useAcademicYear';
 
@@ -431,12 +431,12 @@ export default function App() {
     const { name, value, type } = e.target;
     let val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
     
+    // Política de espacios: el saneado vive en sanitizeFieldValue y SOLO
+    // afecta a campos sin espacios (DNI, email, teléfono). Los demás campos
+    // preservan literalmente lo que el usuario teclea — incluidos espacios
+    // dobles, iniciales y finales. Ver tests en src/__tests__/whitespace.test.ts.
     if (typeof val === 'string') {
-      if (name === 'tutor1Nombre' || name === 'tutor2Nombre') {
-        val = val.replace(/\s{2,}/g, ' ');
-      } else {
-        val = sanitize(val);
-      }
+      val = sanitizeFieldValue(name, val);
     }
 
     if (name === 'formaPago' && (val === 'unico' || val === 'fraccionado')) {
