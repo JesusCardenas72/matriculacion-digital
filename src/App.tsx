@@ -10,6 +10,23 @@ import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, File
 import { motion, AnimatePresence } from 'motion/react';
 const loadPdfModule = () => import('@react-pdf/renderer');
 const loadPdfLib = () => import('pdf-lib');
+const loadPdfJs = async () => {
+  const pdfjs = await import('pdfjs-dist');
+  if (!pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
+    try {
+      // El worker se inlinea en el bundle (compatible con vite-plugin-singlefile)
+      const PdfWorker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?worker&inline')).default;
+      pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
+    } catch {
+      // Fallback: que pdfjs cree el worker por su cuenta a partir de un URL conocido
+      try {
+        const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+      } catch { /* sin worker: pdfjs intentará el modo fake worker */ }
+    }
+  }
+  return pdfjs;
+};
 import { MatriculaPdf } from './MatriculaPdf';
 import { TutorialPdf } from './TutorialPdf';
 import logoCpm from './assets/logo_cpm.png';
@@ -612,6 +629,35 @@ export default function App() {
       img.onerror = reject; img.src = url;
     });
 
+  // ── helper: rasteriza un PDF (firmado/encriptado/no incrustable) a PNGs página a página ──
+  const _rasterizePdfToPngs = async (buf: ArrayBuffer): Promise<Uint8Array[]> => {
+    const pdfjs = await loadPdfJs();
+    const doc = await pdfjs.getDocument({
+      data: new Uint8Array(buf),
+      isEvalSupported: false,
+      password: '',
+    }).promise;
+    const out: Uint8Array[] = [];
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const viewport = page.getViewport({ scale: 2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas 2D no disponible');
+      // @ts-expect-error - canvas option name varies between pdfjs versions
+      await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      const blob: Blob = await new Promise((res, rej) =>
+        canvas.toBlob(b => (b ? res(b) : rej(new Error('toBlob falló'))), 'image/png')
+      );
+      out.push(new Uint8Array(await blob.arrayBuffer()));
+      page.cleanup();
+    }
+    await doc.destroy();
+    return out;
+  };
+
   // ── helper: build the final merged PDF (page 1 = form, rest = attachments) ──
   const buildPdfBytes = async (ts: Date, reqNum: string | null): Promise<{ bytes: Uint8Array; filename: string }> => {
     const { pdf } = await loadPdfModule();
@@ -657,6 +703,24 @@ export default function App() {
           // PDF firmado/encriptado o no incrustable: lo adjuntamos en bruto al PDF resultante
         }
         if (!merged) {
+          // Intento 2: rasterizar con PDF.js (sirve para firmados y para
+          // "encriptados" sin contraseña real, p.ej. con restricciones de propietario)
+          try {
+            const pngs = await _rasterizePdfToPngs(buf);
+            for (const png of pngs) {
+              const embImg = await pdfDoc.embedPng(png);
+              const { width: iW, height: iH } = embImg;
+              const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
+              const pg = pdfDoc.addPage([A4W, A4H]);
+              pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
+              pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+            }
+            merged = true;
+          } catch {
+            // PDF protegido con contraseña real u otro fallo: caemos al adjunto embebido
+          }
+        }
+        if (!merged) {
           try {
             await pdfDoc.attach(new Uint8Array(buf), file.name, {
               mimeType: 'application/pdf',
@@ -668,8 +732,8 @@ export default function App() {
           const pg = pdfDoc.addPage([A4W, A4H]);
           pg.drawText('Documento adjunto', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
           pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
-          pg.drawText('Este PDF está firmado o protegido y se incluye como archivo adjunto', { x: 40, y: A4H - 140, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
-          pg.drawText('incrustado dentro de esta solicitud.', { x: 40, y: A4H - 154, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+          pg.drawText('Este PDF está protegido con contraseña y se incluye como archivo', { x: 40, y: A4H - 140, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+          pg.drawText('adjunto embebido dentro de esta solicitud.', { x: 40, y: A4H - 154, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
         }
       } else if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(file.name)) {
         try {
