@@ -31,7 +31,16 @@
       "Bash(python -c ':*)",
       "Bash(git fetch *)",
       "Bash(xargs grep -l \"Power Automate\\\\|Dataverse\\\\|upload-pdf\")",
-      "Bash(npm test *)"
+      "Bash(npm test *)",
+      "Bash(git pull *)",
+      "Bash(node -e \"const t=require\\('fs'\\).readFileSync\\('./node_modules/pdfjs-dist/build/pdf.mjs','utf8'\\);const i=t.indexOf\\('class PDFPageProxy'\\);console.log\\(t.substring\\(i,i+3000\\).split\\('render'\\).slice\\(0,3\\).join\\('|||render|||'\\)\\);\")",
+      "Bash(node -e \"const t=require\\('fs'\\).readFileSync\\('./node_modules/pdfjs-dist/build/pdf.mjs','utf8'\\);const re=/render\\\\s*\\\\\\(\\\\s*\\\\{[^}]*canvasContext[^}]*\\\\}/g;let m;while\\(\\(m=re.exec\\(t\\)\\)\\){console.log\\('---@'+m.index\\);console.log\\(t.substring\\(m.index,m.index+800\\)\\);}\")",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(ls calculadora-tasas/.gitignore)",
+      "Bash(cat calculadora-tasas/.gitignore)",
+      "Bash(git reset *)",
+      "Bash(git rm *)"
     ]
   }
 }
