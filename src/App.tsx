@@ -544,7 +544,10 @@ export default function App() {
       const task = pdfjs.getDocument({ data: new Uint8Array(buf), password: '' });
       try {
         const doc = await task.promise;
-        await doc.destroy();
+        // pdfjs v6: el documento NO tiene destroy() (lanzaba TypeError). Liberamos con
+        // cleanup(), que además mantiene vivo el worker compartido (task.destroy() lo
+        // terminaría y rompería el rasterizado posterior de otros adjuntos).
+        doc.cleanup();
         return false;
       } catch (err: unknown) {
         // pdfjs PasswordException tiene name === 'PasswordException'
@@ -584,7 +587,7 @@ export default function App() {
       const pdfjs = await loadPdfJs();
       const buf = await file.arrayBuffer();
       const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), password }).promise;
-      await doc.destroy();
+      doc.cleanup(); // pdfjs v6: doc.destroy() no existe; cleanup() libera sin matar el worker
       setPdfPasswords(prev => ({ ...prev, [name]: password }));
       setEncryptedPdfNames(prev => prev.filter(n => n !== name));
       setPwErrors(prev => { const c = { ...prev }; delete c[name]; return c; });
@@ -726,29 +729,38 @@ export default function App() {
 
   const _rasterizePdfToPngs = async (buf: ArrayBuffer, password = ''): Promise<Uint8Array[]> => {
     const pdfjs = await loadPdfJs();
-    const doc = await pdfjs.getDocument({
+    const task = pdfjs.getDocument({
       data: new Uint8Array(buf),
       password,
-    }).promise;
+    });
+    const doc = await task.promise;
     const out: Uint8Array[] = [];
     let blankPages = 0;
-    for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i);
-      const viewport = page.getViewport({ scale: 2 });
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas 2D no disponible');
-      await page.render({ canvasContext: ctx, viewport, canvas: null }).promise;
-      if (_isCanvasBlank(ctx, canvas.width, canvas.height)) blankPages++;
-      const blob: Blob = await new Promise((res, rej) =>
-        canvas.toBlob(b => (b ? res(b) : rej(new Error('toBlob falló'))), 'image/png')
-      );
-      out.push(new Uint8Array(await blob.arrayBuffer()));
-      page.cleanup();
+    try {
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas 2D no disponible');
+        await page.render({ canvasContext: ctx, viewport, canvas: null }).promise;
+        if (_isCanvasBlank(ctx, canvas.width, canvas.height)) blankPages++;
+        const blob: Blob = await new Promise((res, rej) =>
+          canvas.toBlob(b => (b ? res(b) : rej(new Error('toBlob falló'))), 'image/png')
+        );
+        out.push(new Uint8Array(await blob.arrayBuffer()));
+        page.cleanup();
+      }
+    } finally {
+      // pdfjs v6: el documento NO tiene destroy() (lanzaba TypeError y tiraba TODO el
+      // rasterizado ya hecho al placeholder — la causa real del bug). Liberamos con
+      // cleanup(), que NO termina el worker compartido (task.destroy() sí lo haría y
+      // rompería el rasterizado de un segundo adjunto). En try para que liberar nunca
+      // aborte el resultado ya generado.
+      try { doc.cleanup(); } catch { /* noop */ }
     }
-    await doc.destroy();
     if (out.length > 0 && blankPages === out.length) {
       // Todas las páginas se rasterizaron vacías (p.ej. PDF XFA): abortamos para
       // que el adjunto caiga al nivel 3 (archivo embebido) en vez de insertar
