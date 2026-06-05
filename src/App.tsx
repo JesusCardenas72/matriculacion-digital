@@ -528,6 +528,23 @@ export default function App() {
     }
   }, [validateField]);
 
+  // Normaliza a tipo título (primera letra de cada palabra en mayúscula, resto
+  // en minúscula) al salir del campo, tanto en la primera escritura como al
+  // volver y editar después. Preserva los espacios tal cual (capturamos y
+  // reinsertamos el separador, incluidos dobles espacios e iniciales/finales).
+  const handleTitleCaseBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    if (!value) return;
+    const formatted = value
+      .toLocaleLowerCase('es-ES')
+      .replace(/(^|\s)(\p{L})/gu, (_m, sep: string, ch: string) =>
+        sep + ch.toLocaleUpperCase('es-ES')
+      );
+    if (formatted !== value) {
+      setFormData(prev => ({ ...prev, [name]: formatted }));
+    }
+  }, []);
+
   const renderConvalidacionRow = (count: number, discount: number) => (
     <div className="flex justify-between text-sm pt-2 border-t border-gray-100 text-green-600 font-bold">
       <span>{`Convalidación (${count} asig.)`}</span>
@@ -1153,41 +1170,77 @@ export default function App() {
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white p-8 rounded-3xl shadow-sm max-w-md w-full text-center"
+          className="bg-white rounded-3xl shadow-sm max-w-lg w-full overflow-hidden"
         >
-          <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle2 size={40} />
+          {/* Cabecera verde */}
+          <div className="bg-green-500 px-8 pt-8 pb-10 text-center">
+            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 size={44} className="text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-white">¡Solicitud enviada con éxito!</h2>
+            <p className="text-green-100 mt-1 text-sm">
+              Curso {academicYear} · {formData.nombre} {formData.apellidos}
+            </p>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">¡Matrícula Enviada!</h2>
-          <p className="text-gray-600 mb-6">
-            Tu solicitud para el curso {academicYear} ha sido recibida correctamente. Recibirás un correo de confirmación en breve.
-          </p>
-          <div className="flex flex-col gap-3">
-            <button
-              type="button"
-              onClick={() => setSubmitStatus('idle')}
-              className="w-full py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-colors"
-            >
-              ← Volver
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSubmitStatus('idle');
-                setViewMode('form');
-                setSubmitTimestamp(null);
-                setRequestNumber(null);
-                setAttachments([]);
-                setEncryptedPdfNames([]);
-                setValidationErrors([]);
-                setFormData({
-                  nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: '', convalidacionSolicitada: false, convalidacionAsignaturas: [], convalidacionMotivo: '',
-                });
-              }}
-              className="w-full py-3 bg-white text-gray-900 border-2 border-gray-100 rounded-xl font-medium hover:bg-gray-50 transition-colors"
-            >
-              Nueva Solicitud
-            </button>
+
+          {/* Cuerpo */}
+          <div className="px-8 py-6 -mt-4">
+            {/* Tarjeta de correos */}
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                </div>
+                <p className="font-semibold text-blue-900 text-sm">Se enviarán correos a:</p>
+              </div>
+              <div className="bg-white border border-blue-200 rounded-xl px-4 py-2.5 mb-3 flex items-center gap-2">
+                <span className="text-blue-500 text-xs font-bold uppercase tracking-wider shrink-0">Correo</span>
+                <span className="font-mono text-sm font-semibold text-gray-800 truncate">{formData.email}</span>
+              </div>
+              <ul className="space-y-2">
+                <li className="flex items-start gap-2 text-sm text-blue-800">
+                  <span className="mt-0.5 w-5 h-5 rounded-full bg-blue-200 text-blue-700 flex items-center justify-center shrink-0 text-xs font-bold">1</span>
+                  <span><strong>Correo de recepción</strong> — confirmando que hemos recibido tu solicitud.</span>
+                </li>
+                <li className="flex items-start gap-2 text-sm text-blue-800">
+                  <span className="mt-0.5 w-5 h-5 rounded-full bg-blue-200 text-blue-700 flex items-center justify-center shrink-0 text-xs font-bold">2</span>
+                  <span><strong>Correo de confirmación</strong> — cuando el centro revise y confirme tu matrícula.</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Nota adicional */}
+            <p className="text-xs text-gray-400 text-center mb-6">
+              Si deseas realizar otra matrícula, haz clic en «Nueva Solicitud».
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmitStatus('idle');
+                  setViewMode('form');
+                  setSubmitTimestamp(null);
+                  setRequestNumber(null);
+                  setAttachments([]);
+                  setEncryptedPdfNames([]);
+                  setValidationErrors([]);
+                  setFormData({
+                    nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: '', convalidacionSolicitada: false, convalidacionAsignaturas: [], convalidacionMotivo: '',
+                  });
+                }}
+                className="w-full py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-colors"
+              >
+                Nueva Solicitud
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubmitStatus('idle')}
+                className="w-full py-3 bg-white text-gray-500 border border-gray-200 rounded-xl font-medium hover:bg-gray-50 transition-colors text-sm"
+              >
+                ← Volver a la solicitud
+              </button>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -1295,11 +1348,11 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Nombre</label>
-                <input required name="nombre" value={formData.nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} placeholder="Ej: Juan" />
+                <input required name="nombre" value={formData.nombre} onChange={handleChange} onBlur={handleTitleCaseBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} placeholder="Ej: Juan" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Apellidos</label>
-                <input required name="apellidos" value={formData.apellidos} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} placeholder="Ej: Pérez García" />
+                <input required name="apellidos" value={formData.apellidos} onChange={handleChange} onBlur={handleTitleCaseBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} placeholder="Ej: Pérez García" />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I. / N.I.E.</label>
@@ -1312,16 +1365,16 @@ export default function App() {
               </div>
               <div className="md:col-span-2 space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Domicilio Actual</label>
-                <input required name="domicilio" value={formData.domicilio} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={200} placeholder="Calle, número, piso..." />
+                <input required name="domicilio" value={formData.domicilio} onChange={handleChange} onBlur={handleTitleCaseBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={200} placeholder="Calle, número, piso..." />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Localidad</label>
-                <input required name="localidad" value={formData.localidad} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} />
+                <input required name="localidad" value={formData.localidad} onChange={handleChange} onBlur={handleTitleCaseBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Provincia</label>
-                  <input name="provincia" value={formData.provincia} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={50} />
+                  <input name="provincia" value={formData.provincia} onChange={handleChange} onBlur={handleTitleCaseBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={50} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">C.P.</label>
