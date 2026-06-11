@@ -1356,7 +1356,7 @@ export default function App() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I. / N.I.E.</label>
-                <input required name="dni" value={formData.dni} onChange={handleChange} onBlur={handleDniBlur} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.dni ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={10} placeholder="12345678X" />
+                <input required name="dni" value={formData.dni} onChange={handleChange} onBlur={handleDniBlur} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.dni ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={9} placeholder="12345678X o X1234567B" />
                 {fieldErrors.dni && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.dni}</p>}
               </div>
               <div className="space-y-1">
@@ -1383,15 +1383,16 @@ export default function App() {
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Correo Electrónico</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Correo Electrónico <span className="text-red-500">*</span></label>
                 <input required type="email" name="email" value={formData.email} onChange={handleChange} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.email ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={254} placeholder="ejemplo@correo.com" />
                 {fieldErrors.email && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.email}</p>}
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Teléfono</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Teléfono <span className="text-red-500">*</span></label>
                 <input required type="tel" name="telefono" value={formData.telefono} onChange={handleChange} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.telefono ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={15} />
                 {fieldErrors.telefono && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.telefono}</p>}
               </div>
+              <p className="text-gray-500 text-xs mt-3 ml-1">Se utilizará para el envío de la confirmación de recepción y de matriculación. Se facilitará al Tutor del alumno para la comunicación de información docente.</p>
             </div>
 
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-50">

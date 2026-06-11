@@ -114,7 +114,8 @@ export function validateDNI(dni: string): string | null {
   }
 
   if (/^\d{8}$/.test(trimmed)) return 'DNI válido (sin letra)';
-  return 'Formato no reconocido (8 dígitos + letra)';
+  if (/^[XYZ]\d{7}$/.test(trimmed)) return 'NIE válido (sin letra de control)';
+  return 'Formato no reconocido (DNI: 8 dígitos + letra o NIE: X/Y/Z + 7 dígitos + letra)';
 }
 
 export function validateEmail(email: string): string | null {
