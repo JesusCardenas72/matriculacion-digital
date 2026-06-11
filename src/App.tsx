@@ -1392,8 +1392,8 @@ export default function App() {
                 <input required type="tel" name="telefono" value={formData.telefono} onChange={handleChange} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.telefono ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={15} />
                 {fieldErrors.telefono && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.telefono}</p>}
               </div>
-              <p className="text-gray-500 text-xs mt-3 ml-1">Se utilizará para el envío de la confirmación de recepción y de matriculación. Se facilitará al Tutor del alumno para la comunicación de información docente.</p>
             </div>
+            <p className="text-gray-500 text-xs mt-3 px-6 py-3 bg-gray-50 rounded-xl -mx-6">Se utilizará para el envío de la confirmación de recepción y de matriculación. Se facilitará al Tutor del alumno para la comunicación de información docente.</p>
 
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-gray-50">
               <div className="space-y-3">
