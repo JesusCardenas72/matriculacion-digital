@@ -5,9 +5,10 @@ import { EnrollmentFormData } from '../types';
 interface DatosPersonalesSectionProps {
   formData: EnrollmentFormData;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
 }
 
-export const DatosPersonalesSection: React.FC<DatosPersonalesSectionProps> = ({ formData, onChange }) => {
+export const DatosPersonalesSection: React.FC<DatosPersonalesSectionProps> = ({ formData, onChange, onBlur }) => {
   return (
     <section className="bg-white rounded-[2rem] p-4 sm:p-6 md:p-8 shadow-sm border border-gray-100">
       <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
@@ -20,11 +21,11 @@ export const DatosPersonalesSection: React.FC<DatosPersonalesSectionProps> = ({ 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
         <div className="space-y-1">
           <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Nombre</label>
-          <input required name="nombre" value={formData.nombre} onChange={onChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Ej: Juan" />
+          <input required name="nombre" value={formData.nombre} onChange={onChange} onBlur={onBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Ej: Juan" />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Apellidos</label>
-          <input required name="apellidos" value={formData.apellidos} onChange={onChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Ej: Pérez García" />
+          <input required name="apellidos" value={formData.apellidos} onChange={onChange} onBlur={onBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Ej: Pérez García" />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I. / N.I.E.</label>
@@ -32,20 +33,20 @@ export const DatosPersonalesSection: React.FC<DatosPersonalesSectionProps> = ({ 
         </div>
         <div className="space-y-1">
           <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Fecha de Nacimiento</label>
-          <input required type="date" name="fechaNacimiento" value={formData.fechaNacimiento} onChange={onChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+          <input required type="date" name="fechaNacimiento" value={formData.fechaNacimiento} onChange={onChange} onBlur={onBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
         </div>
         <div className="md:col-span-2 space-y-1">
           <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Domicilio Actual</label>
-          <input required name="domicilio" value={formData.domicilio} onChange={onChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Calle, número, piso..." />
+          <input required name="domicilio" value={formData.domicilio} onChange={onChange} onBlur={onBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" placeholder="Calle, número, piso..." />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Localidad</label>
-          <input required name="localidad" value={formData.localidad} onChange={onChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+          <input required name="localidad" value={formData.localidad} onChange={onChange} onBlur={onBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Provincia</label>
-            <input name="provincia" value={formData.provincia} onChange={onChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+            <input name="provincia" value={formData.provincia} onChange={onChange} onBlur={onBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
           </div>
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">C.P.</label>

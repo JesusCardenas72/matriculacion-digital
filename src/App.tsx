@@ -164,7 +164,7 @@ export default function App() {
   };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error' | 'duplicate'>('idle');
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error' | 'duplicate' | 'pdf_failed'>('idle');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -515,11 +515,17 @@ export default function App() {
     if (/^\d{1,8}$/.test(raw)) {
       const padded = raw.padStart(8, '0');
       formatted = padded + LETTERS[parseInt(padded, 10) % 23];
+    } else if (/^(\d{1,7})([A-Z])$/.test(raw)) {
+      const [, numStr, letter] = raw.match(/^(\d{1,7})([A-Z])$/)!;
+      formatted = numStr.padStart(8, '0') + letter;
     } else if (/^[XYZ]\d{1,7}$/.test(raw)) {
       const prefix = raw[0];
       const numStr = raw.slice(1).padStart(7, '0');
       const prefixVal = ({ X: 0, Y: 1, Z: 2 } as Record<string, number>)[prefix];
       formatted = prefix + numStr + LETTERS[(prefixVal * 10000000 + parseInt(numStr, 10)) % 23];
+    } else if (/^([XYZ])(\d{1,6})([A-Z])$/.test(raw)) {
+      const [, prefix, numStr, letter] = raw.match(/^([XYZ])(\d{1,6})([A-Z])$/)!;
+      formatted = prefix + numStr.padStart(7, '0') + letter;
     }
 
     if (formatted !== e.target.value) {
@@ -528,20 +534,53 @@ export default function App() {
     }
   }, [validateField]);
 
-  // Normaliza a tipo título (primera letra de cada palabra en mayúscula, resto
-  // en minúscula) al salir del campo, tanto en la primera escritura como al
-  // volver y editar después. Preserva los espacios tal cual (capturamos y
-  // reinsertamos el separador, incluidos dobles espacios e iniciales/finales).
+  // Normaliza a tipo título al salir del campo: primera letra de cada palabra
+  // en mayúscula, excepto palabras menores (de, el, la, que, del, los, las, y,
+  // e, en, con, por, para, un, una) que permanecen en minúscula a menos que
+  // sean la primera palabra del texto. Preserva espacios dobles e iniciales.
+  const MINOR_WORDS = new Set(['de', 'el', 'la', 'que', 'del', 'los', 'las', 'y', 'e', 'en', 'con', 'por', 'para', 'un', 'una']);
   const handleTitleCaseBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     if (!value) return;
-    const formatted = value
-      .toLocaleLowerCase('es-ES')
-      .replace(/(^|\s)(\p{L})/gu, (_m, sep: string, ch: string) =>
-        sep + ch.toLocaleUpperCase('es-ES')
-      );
+    const words = value.toLocaleLowerCase('es-ES').split(/(\s+)/);
+    let first = true;
+    const formatted = words.map(w => {
+      if (!w.trim()) return w;
+      if (first) { first = false; return w.charAt(0).toLocaleUpperCase('es-ES') + w.slice(1); }
+      if (MINOR_WORDS.has(w)) return w;
+      return w.charAt(0).toLocaleUpperCase('es-ES') + w.slice(1);
+    }).join('');
     if (formatted !== value) {
       setFormData(prev => ({ ...prev, [name]: formatted }));
+    }
+  }, []);
+
+  // Convierte año de 2 dígitos a 4 dígitos al salir del campo de fecha.
+  // Si el año < 100, añade el siglo: ≤ año actual → 2000, si no → 1900.
+  const handleDateBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    if (!value || name !== 'fechaNacimiento') return;
+    const parts = value.split('-');
+    if (parts.length !== 3) return;
+    let year = parseInt(parts[0], 10);
+    if (year >= 100 || isNaN(year)) return;
+    const currentYear = new Date().getFullYear();
+    year += year <= (currentYear % 100) ? 2000 : 1900;
+    const formatted = `${year}-${parts[1]}-${parts[2]}`;
+    if (formatted !== value) {
+      setFormData(prev => ({ ...prev, [name]: formatted }));
+    }
+  }, []);
+
+  // Al pulsar Tab en fecha de nacimiento salta directamente a Domicilio
+  // ignorando el botón calendario nativo del input type="date".
+  const handleDateKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Tab' && !e.shiftKey) {
+      const domicilio = fieldRefs.current['domicilio'];
+      if (domicilio) {
+        e.preventDefault();
+        domicilio.focus();
+      }
     }
   }, []);
 
@@ -955,6 +994,7 @@ export default function App() {
     setIsSubmitting(true);
     setSubmitStatus('idle');
     const alreadySubmitted = submitTimestamp !== null;
+    let datosGuardados = false;
 
     try {
       const now = alreadySubmitted ? submitTimestamp : new Date();
@@ -1086,6 +1126,7 @@ export default function App() {
         if (!rowId) throw new Error(`No se recibió rowId del servidor`);
         if (!nOrden) throw new Error(`Registro creado (${rowId}) pero nOrden devuelto es ${nOrden} — revisa la acción Response del flujo PA_CREAR`);
 
+        datosGuardados = true;
         reqNum = String(nOrden);
         setRequestNumber(reqNum);
 
@@ -1157,8 +1198,12 @@ export default function App() {
       }
     } catch (error) {
       console.error(error);
-      setSubmitError(error instanceof Error ? error.message : 'Error desconocido');
-      setSubmitStatus('error');
+      if (datosGuardados) {
+        setSubmitStatus('pdf_failed');
+      } else {
+        setSubmitError(error instanceof Error ? error.message : 'Error desconocido');
+        setSubmitStatus('error');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1213,6 +1258,87 @@ export default function App() {
             <p className="text-xs text-gray-400 text-center mb-6">
               Si deseas realizar otra matrícula, haz clic en «Nueva Solicitud».
             </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setSubmitStatus('idle');
+                  setViewMode('form');
+                  setSubmitTimestamp(null);
+                  setRequestNumber(null);
+                  setAttachments([]);
+                  setEncryptedPdfNames([]);
+                  setValidationErrors([]);
+                  setFormData({
+                    nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: '', convalidacionSolicitada: false, convalidacionAsignaturas: [], convalidacionMotivo: '',
+                  });
+                }}
+                className="w-full py-3 bg-gray-900 text-white rounded-xl font-medium hover:bg-gray-800 transition-colors"
+              >
+                Nueva Solicitud
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubmitStatus('idle')}
+                className="w-full py-3 bg-white text-gray-500 border border-gray-200 rounded-xl font-medium hover:bg-gray-50 transition-colors text-sm"
+              >
+                ← Volver a la solicitud
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (submitStatus === 'pdf_failed') {
+    return (
+      <div className="min-h-screen bg-[#f5f5f5] flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white rounded-3xl shadow-sm max-w-lg w-full overflow-hidden"
+        >
+          {/* Cabecera ámbar */}
+          <div className="bg-amber-500 px-8 pt-8 pb-10 text-center">
+            <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <h2 className="text-2xl font-bold text-white">Solicitud recibida</h2>
+            <p className="text-amber-100 mt-1 text-sm">
+              Curso {academicYear} · {formData.nombre} {formData.apellidos}
+            </p>
+          </div>
+
+          {/* Cuerpo */}
+          <div className="px-8 py-6 -mt-4">
+            {/* Tarjeta de aviso */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
+              <p className="text-sm text-amber-900 font-semibold mb-3">
+                Los datos del formulario se han recibido correctamente.
+              </p>
+              <p className="text-sm text-amber-800 mb-3">
+                Sin embargo, el documento PDF adjunto no pudo ser procesado automáticamente.
+              </p>
+              <div className="bg-white border border-amber-200 rounded-xl px-4 py-3 mb-3">
+                <p className="text-xs text-amber-700 font-semibold uppercase tracking-wider mb-1">
+                  Para completar la matriculación
+                </p>
+                <p className="text-sm text-amber-900">
+                  Envía la documentación adjunta al correo:
+                </p>
+                <a
+                  href="mailto:13004341.cpm@educastillalamancha.es"
+                  className="font-mono text-sm font-bold text-amber-700 underline hover:text-amber-900 break-all"
+                >
+                  13004341.cpm@educastillalamancha.es
+                </a>
+              </div>
+              <p className="text-sm text-amber-800">
+                Recibirás un correo electrónico informando del proceso de matriculación.
+              </p>
+            </div>
 
             <div className="flex flex-col gap-3">
               <button
@@ -1361,11 +1487,11 @@ export default function App() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Fecha de Nacimiento</label>
-                <input required type="date" name="fechaNacimiento" value={formData.fechaNacimiento} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+                <input required type="date" name="fechaNacimiento" value={formData.fechaNacimiento} onChange={handleChange} onBlur={handleDateBlur} onKeyDown={handleDateKeyDown} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
               </div>
               <div className="md:col-span-2 space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Domicilio Actual</label>
-                <input required name="domicilio" value={formData.domicilio} onChange={handleChange} onBlur={handleTitleCaseBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={200} placeholder="Calle, número, piso..." />
+                <input required name="domicilio" value={formData.domicilio} onChange={handleChange} onBlur={handleTitleCaseBlur} ref={registerFieldRef('domicilio')} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={200} placeholder="Calle, número, piso..." />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Localidad</label>
@@ -1464,7 +1590,7 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Tutor/a Legal 1 (Apellidos y Nombre)</label>
-                  <input name="tutor1Nombre" value={formData.tutor1Nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} />
+                  <input name="tutor1Nombre" value={formData.tutor1Nombre} onChange={handleChange} onBlur={handleTitleCaseBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
@@ -1475,7 +1601,7 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="md:col-span-2 space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Tutor/a Legal 2 (Apellidos y Nombre)</label>
-                  <input name="tutor2Nombre" value={formData.tutor2Nombre} onChange={handleChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} />
+                  <input name="tutor2Nombre" value={formData.tutor2Nombre} onChange={handleChange} onBlur={handleTitleCaseBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" maxLength={100} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
