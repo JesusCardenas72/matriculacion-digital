@@ -9,7 +9,6 @@ import { loadMaterias, buildMateriasIndex, getMaterias, queryMateriasCurso, quer
 import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, FileText, Download, Paperclip, X, ExternalLink, HelpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 const loadPdfModule = () => import('@react-pdf/renderer');
-const loadPdfLib = () => import('pdf-lib');
 const loadPdfJs = async () => {
   const pdfjs = await import('pdfjs-dist');
   if (!pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
@@ -168,12 +167,19 @@ export default function App() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
+  // Nombres de adjuntos que NO se pudieron subir a Dataverse (se muestran en el
+  // aviso de éxito para que el solicitante los reenvíe por correo). Fallo en alto.
+  const [attachmentWarnings, setAttachmentWarnings] = useState<string[]>([]);
 
   // ── Endpoints directos a Power Automate (sin backend intermedio) ────────────
   const PA_DUPLICADOS_URL = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b62c3d4b21d24bda8daa75a8586198eb/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=4nqPljifCY1CBxAiKj03La2YEksNn78meKn9-nlXGCk';
   const PA_NORDEM_URL     = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/046ad596f6eb4e919d17aff5c8c567f4/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=tvSwEUEfq-lI-Au8YLOtpD5KNyfskQhuuhJ3NGEloww';
   const PA_CREAR_URL      = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ec7a2a1c67974d32ba23de811d20e93d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3G39Rx3ZC55SKVIoBGvRufw-d6J6fYl74GOi46We9f0';
   const PA_PDF_URL        = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b31521c981d04d95a8a6917a899f3988/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=i6YvgMW9GNJO-1Ynz0A3hAiNPGvZVpXkzbsdoeBYsfU';
+  // Flow "PublicSubirAdjunto": recibe { rowId, filename, mimeType, contentBase64 }
+  // y crea una annotation (Nota) en Dataverse con los bytes ORIGINALES del adjunto.
+  // Se llama una vez por fichero (cuerpos pequeños → sin tocar límites de tamaño).
+  const PA_ADJUNTO_URL    = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/aa3dffc8d729491387d70b36f84fee70/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=4XJVwT2uqMQyDky8patSefq9APfx9MhFvegDXteCgXM';
   const [requestNumber, setRequestNumber] = useState<string | null>(null);
 
   const cursos = useMemo(() => {
@@ -658,7 +664,7 @@ export default function App() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files: File[] = e.target.files ? Array.from(e.target.files) : [];
-    const validExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|pdf)$/i;
+    const validExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|heic|heif|pdf)$/i;
     const MAX_TOTAL_SIZE = 5 * 1024 * 1024;
     const validFiles = files.filter(file => {
       const isImage = file.type.startsWith('image/');
@@ -682,7 +688,7 @@ export default function App() {
       const names = rejected.map(f => `«${f.name}»`).join(', ');
       setValidationErrors([{
         key: 'files',
-        label: `Formato no permitido: ${names}. Solo se admiten archivos PDF (.pdf) o imágenes (.jpg, .jpeg, .png, .gif, .webp, .bmp). Renombra el archivo con la extensión correcta y vuelve a adjuntarlo.`,
+        label: `Formato no permitido: ${names}. Solo se admiten archivos PDF (.pdf) o imágenes (.jpg, .jpeg, .png, .gif, .webp, .bmp, .heic, .heif). Renombra el archivo con la extensión correcta y vuelve a adjuntarlo.`,
       }]);
       setShowValidationModal(true);
     }
@@ -753,80 +759,7 @@ export default function App() {
 
   const currentYear = getCurrentCalendarYear();
 
-  // ── helper: convert image File to PNG Uint8Array (for pdf-lib attachments) ──
-  const _imageToPngBytes = (file: File): Promise<Uint8Array> =>
-    new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(file);
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement('canvas');
-        c.width = img.naturalWidth; c.height = img.naturalHeight;
-        c.getContext('2d')!.drawImage(img, 0, 0);
-        URL.revokeObjectURL(url);
-        fetch(c.toDataURL('image/png'))
-          .then(r => r.arrayBuffer()).then(ab => resolve(new Uint8Array(ab))).catch(reject);
-      };
-      img.onerror = reject; img.src = url;
-    });
-
-  // ── helper: rasteriza un PDF (firmado/encriptado/no incrustable) a PNGs página a página ──
-  // pdf.js pinta el fondo a blanco (#ffffff) antes de dibujar el contenido de la
-  // página. Si tras renderizar no queda ningún píxel no-blanco, esa página se
-  // rasterizó vacía. Una página suelta en blanco es legítima (suele venir así en
-  // el origen) y se conserva; solo si TODAS salen vacías estamos ante el caso XFA
-  // (administración), cuyo contenido vive en una capa aparte y nunca se pinta.
-  const _isCanvasBlank = (ctx: CanvasRenderingContext2D, w: number, h: number): boolean => {
-    const { data } = ctx.getImageData(0, 0, w, h);
-    for (let i = 0; i < data.length; i += 16) { // muestreo 1 de cada 4 píxeles
-      if (data[i] < 250 || data[i + 1] < 250 || data[i + 2] < 250) return false;
-    }
-    return true;
-  };
-
-  const _rasterizePdfToPngs = async (buf: ArrayBuffer, password = ''): Promise<Uint8Array[]> => {
-    const pdfjs = await loadPdfJs();
-    const task = pdfjs.getDocument({
-      data: new Uint8Array(buf),
-      password,
-    });
-    const doc = await task.promise;
-    const out: Uint8Array[] = [];
-    let blankPages = 0;
-    try {
-      for (let i = 1; i <= doc.numPages; i++) {
-        const page = await doc.getPage(i);
-        const viewport = page.getViewport({ scale: 2 });
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.ceil(viewport.width);
-        canvas.height = Math.ceil(viewport.height);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('Canvas 2D no disponible');
-        await page.render({ canvasContext: ctx, viewport, canvas: null }).promise;
-        if (_isCanvasBlank(ctx, canvas.width, canvas.height)) blankPages++;
-        const blob: Blob = await new Promise((res, rej) =>
-          canvas.toBlob(b => (b ? res(b) : rej(new Error('toBlob falló'))), 'image/png')
-        );
-        out.push(new Uint8Array(await blob.arrayBuffer()));
-        page.cleanup();
-      }
-    } finally {
-      // pdfjs v6: el documento NO tiene destroy() (lanzaba TypeError y tiraba TODO el
-      // rasterizado ya hecho al placeholder — la causa real del bug). Liberamos con
-      // cleanup(), que NO termina el worker compartido (task.destroy() sí lo haría y
-      // rompería el rasterizado de un segundo adjunto). En try para que liberar nunca
-      // aborte el resultado ya generado.
-      try { doc.cleanup(); } catch { /* noop */ }
-    }
-    if (out.length > 0 && blankPages === out.length) {
-      // Todas las páginas se rasterizaron vacías (p.ej. PDF XFA): abortamos para
-      // que el adjunto caiga al nivel 3 (archivo embebido) en vez de insertar
-      // páginas en blanco. Una o varias páginas vacías sueltas sí se conservan.
-      throw new Error('Rasterizado en blanco en todas las páginas (posible PDF XFA)');
-    }
-    return out;
-  };
-
-  // ── helper: build the final merged PDF (page 1 = form, rest = attachments) ──
+  // ── helper: build the form PDF (page 1 = form) ──
   const buildPdfBytes = async (ts: Date, reqNum: string | null): Promise<{ bytes: Uint8Array; filename: string }> => {
     const { pdf } = await loadPdfModule();
     const mainBlob = await pdf(
@@ -846,104 +779,11 @@ export default function App() {
     const hs = ts.toLocaleTimeString('es-ES').replace(/:/g, '-');
     const filename = `SOLICITUD_${ds}_${hs}.pdf`;
 
-    if (attachments.length === 0) {
-      return { bytes: new Uint8Array(await mainBlob.arrayBuffer()), filename };
-    }
-
-    // Merge attachments as subsequent pages
-    const { PDFDocument, StandardFonts, rgb } = await loadPdfLib();
-    const mainBytes = new Uint8Array(await mainBlob.arrayBuffer());
-    const pdfDoc = await PDFDocument.load(mainBytes);
-    const A4W = 595.28, A4H = 841.89;
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-
-    for (const file of attachments) {
-      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-      if (isPdf) {
-        const buf = await file.arrayBuffer();
-        let merged = false;
-        try {
-          const srcDoc = await PDFDocument.load(buf, { ignoreEncryption: true });
-          // `ignoreEncryption` solo evita el error de contraseña: NO descifra los
-          // streams. Si copiáramos sus páginas, pdf-lib trasladaría los bytes aún
-          // cifrados y se verían en blanco. Forzamos el rasterizado con pdf.js
-          // (intento 2), que sí descifra los PDFs con restricción de propietario.
-          if (srcDoc.isEncrypted) throw new Error('PDF cifrado: no apto para copyPages');
-          const copied = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
-          copied.forEach(pg => pdfDoc.addPage(pg));
-          merged = true;
-        } catch {
-          // PDF firmado/encriptado o no incrustable: lo adjuntamos en bruto al PDF resultante
-        }
-        if (!merged) {
-          // Intento 2: rasterizar con PDF.js (sirve para firmados y para
-          // "encriptados" sin contraseña real, p.ej. con restricciones de propietario)
-          try {
-            const pngs = await _rasterizePdfToPngs(buf, pdfPasswords[file.name] ?? '');
-            for (const png of pngs) {
-              const embImg = await pdfDoc.embedPng(png);
-              const { width: iW, height: iH } = embImg;
-              const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
-              const pg = pdfDoc.addPage([A4W, A4H]);
-              pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
-              pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
-            }
-            merged = true;
-          } catch {
-            // PDF protegido con contraseña real u otro fallo: caemos al adjunto embebido
-          }
-        }
-        if (!merged) {
-          try {
-            await pdfDoc.attach(new Uint8Array(buf), file.name, {
-              mimeType: 'application/pdf',
-              description: 'Documento adjuntado por el solicitante (firmado/protegido)',
-            });
-          } catch {
-            // Si ni attach funciona, seguimos sin bloquear el envío
-          }
-          const pg = pdfDoc.addPage([A4W, A4H]);
-          pg.drawText('Documento adjunto', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
-          pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
-          pg.drawText('Este PDF está protegido con contraseña y se incluye como archivo', { x: 40, y: A4H - 140, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
-          pg.drawText('adjunto embebido dentro de esta solicitud.', { x: 40, y: A4H - 154, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
-        }
-      } else if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(file.name)) {
-        try {
-          const isJpeg = file.type === 'image/jpeg' || /\.jpe?g$/i.test(file.name);
-          const embImg = isJpeg
-            ? await pdfDoc.embedJpg(await file.arrayBuffer())
-            : await pdfDoc.embedPng(await _imageToPngBytes(file));
-          const { width: iW, height: iH } = embImg;
-          const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
-          const pg = pdfDoc.addPage([A4W, A4H]);
-          pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
-          pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
-        } catch {
-          try {
-            await pdfDoc.attach(new Uint8Array(await file.arrayBuffer()), file.name, {
-              mimeType: file.type || 'application/octet-stream',
-              description: 'Imagen adjuntada por el solicitante',
-            });
-          } catch { /* noop */ }
-          const pg = pdfDoc.addPage([A4W, A4H]);
-          pg.drawText('Imagen adjunta', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
-          pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
-        }
-      } else {
-        try {
-          await pdfDoc.attach(new Uint8Array(await file.arrayBuffer()), file.name, {
-            mimeType: file.type || 'application/octet-stream',
-            description: 'Documento adjuntado por el solicitante',
-          });
-        } catch { /* noop */ }
-        const pg = pdfDoc.addPage([A4W, A4H]);
-        pg.drawText('Documento adjunto', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
-        pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
-      }
-    }
-
-    return { bytes: await pdfDoc.save(), filename };
+    // Los adjuntos ya NO se fusionan en este PDF. Se suben aparte como annotations
+    // (Notas) a Dataverse con sus bytes ORIGINALES (ver subirAdjuntos), de modo que
+    // pdf-lib/pdf.js nunca tocan un adjunto. Esto elimina de raíz los fallos por PDF
+    // cifrado contra escritura, HEIC de móviles antiguos y rasterizado en blanco.
+    return { bytes: new Uint8Array(await mainBlob.arrayBuffer()), filename };
   };
 
   // ── helper: verifica que CADA adjunto se puede leer/incrustar ANTES de crear
@@ -974,6 +814,43 @@ export default function App() {
     return btoa(binary);
   };
 
+  // ── helper: File → base64 (sin prefijo data:), reutiliza el troceado seguro ──
+  const fileToBase64 = async (file: File): Promise<string> =>
+    uint8ToBase64(new Uint8Array(await file.arrayBuffer()));
+
+  // ── Sube cada adjunto ORIGINAL a Dataverse como annotation (Nota) vía el flow
+  // PublicSubirAdjunto, uno a uno (cuerpos pequeños → sin tocar límites de tamaño).
+  // No lanza: la matrícula ya está creada y no debe perderse por un adjunto. Devuelve
+  // los nombres de los que fallaron para avisar al solicitante (fallo en alto). ──
+  const subirAdjuntos = async (rowId: string): Promise<string[]> => {
+    if (attachments.length === 0) return [];
+    if (!PA_ADJUNTO_URL) {
+      console.warn('PA_ADJUNTO_URL vacío: los adjuntos NO se subieron a Dataverse.');
+      return attachments.map(f => f.name);
+    }
+    const fallidos: string[] = [];
+    for (const file of attachments) {
+      try {
+        const contentBase64 = await fileToBase64(file);
+        const res = await fetch(PA_ADJUNTO_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rowId,
+            filename: file.name,
+            mimeType: file.type || 'application/octet-stream',
+            contentBase64,
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } catch (err) {
+        console.error(`Fallo al subir adjunto «${file.name}»:`, err);
+        fallidos.push(file.name);
+      }
+    }
+    return fallidos;
+  };
+
   const handlePreviewPdf = async () => {
     const { bytes } = await buildPdfBytes(new Date(), '#');
     const blob = new Blob([bytes], { type: 'application/pdf' });
@@ -993,6 +870,7 @@ export default function App() {
   const handleSendAndDownload = async () => {
     setIsSubmitting(true);
     setSubmitStatus('idle');
+    setAttachmentWarnings([]);
     const alreadySubmitted = submitTimestamp !== null;
     let datosGuardados = false;
 
@@ -1180,6 +1058,11 @@ export default function App() {
           }),
         });
         if (!resPdf.ok) throw new Error(`Error al subir el PDF (HTTP ${resPdf.status})`);
+
+        // ── Paso 5: Subir los adjuntos ORIGINALES como annotations (Notas) ──
+        // Bytes en bruto → Dataverse no rechaza cifrados; pdf-lib/pdf.js no intervienen.
+        const adjuntosFallidos = await subirAdjuntos(rowId);
+        setAttachmentWarnings(adjuntosFallidos);
       } else {
         // Re-descarga: reconstruir el PDF con el número de orden ya guardado en estado
         ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
@@ -1254,6 +1137,30 @@ export default function App() {
               </ul>
             </div>
 
+            {/* Aviso: adjuntos que NO se pudieron subir (fallo en alto, no silencioso) */}
+            {attachmentWarnings.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertCircle size={18} className="text-amber-600 shrink-0" />
+                  <p className="font-semibold text-amber-900 text-sm">Algún documento no se pudo adjuntar</p>
+                </div>
+                <p className="text-sm text-amber-800 mb-2">
+                  Tu matrícula <strong>se registró correctamente</strong>, pero
+                  {attachmentWarnings.length === 1 ? ' este documento no llegó' : ' estos documentos no llegaron'} al centro:
+                </p>
+                <ul className="list-disc list-inside text-sm text-amber-800 mb-2">
+                  {attachmentWarnings.map((name, i) => (
+                    <li key={i} className="truncate">{name}</li>
+                  ))}
+                </ul>
+                <p className="text-xs text-amber-700">
+                  Por favor, envíalo{attachmentWarnings.length === 1 ? '' : 's'} por correo a{' '}
+                  <a href="mailto:13004341.cpm@educastillalamancha.es" className="underline font-semibold">13004341.cpm@educastillalamancha.es</a>
+                  {requestNumber ? <> indicando tu nº de matrícula <strong>{requestNumber}</strong>.</> : '.'}
+                </p>
+              </div>
+            )}
+
             {/* Nota adicional */}
             <p className="text-xs text-gray-400 text-center mb-6">
               Si deseas realizar otra matrícula, haz clic en «Nueva Solicitud».
@@ -1268,6 +1175,7 @@ export default function App() {
                   setSubmitTimestamp(null);
                   setRequestNumber(null);
                   setAttachments([]);
+                  setAttachmentWarnings([]);
                   setEncryptedPdfNames([]);
                   setValidationErrors([]);
                   setFormData({
@@ -1349,6 +1257,7 @@ export default function App() {
                   setSubmitTimestamp(null);
                   setRequestNumber(null);
                   setAttachments([]);
+                  setAttachmentWarnings([]);
                   setEncryptedPdfNames([]);
                   setValidationErrors([]);
                   setFormData({
@@ -2808,7 +2717,7 @@ export default function App() {
                       type="file"
                       id="file-input"
                       multiple
-                      accept="image/*,.pdf"
+                      accept="image/*,.heic,.heif,.pdf"
                       onChange={handleFileChange}
                       className="hidden"
                     />
