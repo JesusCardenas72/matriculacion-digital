@@ -166,6 +166,7 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error' | 'duplicate'>('idle');
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitPdfError, setSubmitPdfError] = useState(false);
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
 
@@ -954,7 +955,9 @@ export default function App() {
   const handleSendAndDownload = async () => {
     setIsSubmitting(true);
     setSubmitStatus('idle');
+    setSubmitPdfError(false);
     const alreadySubmitted = submitTimestamp !== null;
+    let isPdfPhase = false;
 
     try {
       const now = alreadySubmitted ? submitTimestamp : new Date();
@@ -1089,6 +1092,7 @@ export default function App() {
         reqNum = String(nOrden);
         setRequestNumber(reqNum);
 
+        isPdfPhase = true;
         ({ bytes: pdfBytes, filename } = await buildPdfBytes(now, reqNum));
 
         // ── Paso 4: Subir PDF + email + asignaturas ─────────────────────────
@@ -1158,6 +1162,7 @@ export default function App() {
     } catch (error) {
       console.error(error);
       setSubmitError(error instanceof Error ? error.message : 'Error desconocido');
+      if (isPdfPhase) setSubmitPdfError(true);
       setSubmitStatus('error');
     } finally {
       setIsSubmitting(false);
@@ -2756,7 +2761,7 @@ export default function App() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onClick={() => { setSubmitStatus('idle'); setSubmitError(null); }}
+                onClick={() => { setSubmitStatus('idle'); setSubmitError(null); setSubmitPdfError(false); }}
                 className="fixed inset-0 bg-black/40 backdrop-blur-md z-[140]"
               />
               <motion.div
@@ -2775,13 +2780,20 @@ export default function App() {
                   <p className="text-sm text-red-800 font-medium">
                     {submitError || 'Hubo un error al enviar el formulario. Por favor, inténtalo de nuevo.'}
                   </p>
-                  <p className="text-xs text-red-600 mt-3">
-                    Si el problema persiste, comprueba tu conexión a Internet o contacta con Secretaría.
-                  </p>
+                  {submitPdfError ? (
+                    <p className="text-sm text-red-900 font-semibold mt-3">
+                      La matrícula ha sido enviada, pero se ha producido un error al adjuntar la documentación complementaria. Para que se termine la tramitación de su expediente <strong>DEBE REMITIRLA POR CORREO ELECTRÓNICO A{' '}
+                      <a href="mailto:13004341.cpm@educastillalamancha.es" className="underline break-all">13004341.cpm@educastillalamancha.es</a></strong>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-red-600 mt-3">
+                      Si el problema persiste, comprueba tu conexión a Internet o contacta con Secretaría.
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setSubmitStatus('idle'); setSubmitError(null); }}
+                  onClick={() => { setSubmitStatus('idle'); setSubmitError(null); setSubmitPdfError(false); }}
                   className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
                 >
                   Entendido
