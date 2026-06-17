@@ -21,7 +21,7 @@ export const MenoresEdadSection: React.FC<MenoresEdadSectionProps> = ({ formData
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2 space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Tutor/a Legal 1 (Apellidos y Nombre)</label>
-            <input name="tutor1Nombre" value={formData.tutor1Nombre} onChange={onChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+            <input name="tutor1Nombre" value={formData.tutor1Nombre} onChange={onChange} onBlur={onBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
           </div>
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
@@ -32,7 +32,7 @@ export const MenoresEdadSection: React.FC<MenoresEdadSectionProps> = ({ formData
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2 space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Tutor/a Legal 2 (Apellidos y Nombre)</label>
-            <input name="tutor2Nombre" value={formData.tutor2Nombre} onChange={onChange} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
+            <input name="tutor2Nombre" value={formData.tutor2Nombre} onChange={onChange} onBlur={onBlur} className="w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all" />
           </div>
           <div className="space-y-1">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I.</label>
