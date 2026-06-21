@@ -81,6 +81,7 @@ export default function App() {
   const [isAperturaWarningOpen, setIsAperturaWarningOpen] = useState(false);
   const [isFeesInfoModalOpen, setIsFeesInfoModalOpen] = useState(false);
   const [isModelo046InfoOpen, setIsModelo046InfoOpen] = useState(false);
+  const [isModelo046ConfirmOpen, setIsModelo046ConfirmOpen] = useState(false);
   const [selectedArticle, setSelectedArticle] = useState<{ title: string; text: string } | null>(null);
   const [validationErrors, setValidationErrors] = useState<{ key: string; label: string }[]>([]);
   const [showValidationModal, setShowValidationModal] = useState(false);
@@ -1533,7 +1534,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => { setConvalidacionModalView('types'); setIsConvalidacionModalOpen(true); }}
-                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${(formData.convalidacionAsignaturas ?? []).length > 0 ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${(formData.convalidacionAsignaturas ?? []).length > 0 ? 'bg-gray-900 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'}`}
               >
                 {(formData.convalidacionAsignaturas ?? []).length > 0 && <CheckCircle2 size={16} />}
                 Convalidación
@@ -1791,17 +1792,17 @@ export default function App() {
                 <button 
                   type="button"
                   onClick={() => setIsFeesInfoModalOpen(true)}
-                  className="p-1.5 text-gray-400 hover:text-gray-900 transition-colors"
+                  className="flex items-center justify-center p-0.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-all w-[32px] min-h-[32px]"
                   title="Ver información de tasas"
                 >
-                  <AlertCircle size={18} />
+                  <HelpCircle size={26} />
                 </button>
               </div>
               <div className="flex flex-col gap-2 items-end relative">
                 <button 
                   type="button"
                   onClick={() => setIsExemptionModalOpen(true)}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${(formData.tipoReduccion && formData.tipoReduccion !== 'ninguna') || formData.matriculaHonor ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${(formData.tipoReduccion && formData.tipoReduccion !== 'ninguna') || formData.matriculaHonor ? 'bg-gray-900 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'}`}
                 >
                   <CheckCircle2 size={16} className={(formData.tipoReduccion && formData.tipoReduccion !== 'ninguna') || formData.matriculaHonor ? 'block' : 'hidden'} />
                   Reducción o Exención de Tasas
@@ -2389,10 +2390,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setSelectedArticle(ARTICLE_TEXTS.apertura_expediente)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white text-gray-400 hover:text-gray-900 rounded-xl shadow-sm transition-all"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center p-0.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-all w-[32px] min-h-[32px]"
                   title="Ver normativa sobre apertura de expediente"
                 >
-                  <AlertCircle size={20} />
+                  <HelpCircle size={26} />
                 </button>
               </div>
             </div>
@@ -2539,42 +2540,101 @@ export default function App() {
                     </>
                   )}
                   {viewMode !== 'readonly' && (
-                    <>
-                      <div className="md:col-span-2 flex items-center gap-3 mt-2">
-                        <a
-                          href="https://modelos-tributos.jccm.es/webgreco/modelos/jsp/cumplimentacion/GreJspModelo046_2012_P.jsp"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn-modelo046"
-                        >
-                          Modelo 046
-                          <div className="arrow-wrapper">
-                            <div className="arrow"></div>
-                          </div>
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => setIsModelo046InfoOpen(true)}
-                          className="p-1.5 text-gray-400 hover:text-gray-900 transition-colors"
-                          title="Instrucciones para cumplimentar el Modelo 046"
-                        >
-                          <AlertCircle size={20} />
-                        </button>
-                      </div>
-                      {formData.importeTotal && parseFloat(formData.importeTotal) > 0 && (
-                        <div className="md:col-span-2 mt-3 rounded-2xl bg-amber-50 border border-amber-200 p-4 flex gap-3">
-                          <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
-                          <p className="text-xs text-amber-800 leading-relaxed">
-                            Será necesario adjuntar documentación acreditativa el pago de la tasa, con <strong>justificante del pago</strong> (no es válido copia de la autoliquidación). Hasta que no se aporte, la tramitación de la Solicitud de Matrícula quedará <strong>en suspenso</strong> y, transcurrido el plazo de matrícula sin haber aportado dicha documentación, su solicitud quedará <strong>desestimada</strong>.
-                          </p>
+                    <div className="flex items-start gap-3 pt-6">
+                      <button
+                        type="button"
+                        onClick={() => setIsModelo046ConfirmOpen(true)}
+                        className="btn-modelo046"
+                      >
+                        Modelo 046
+                        <div className="arrow-wrapper">
+                          <div className="arrow"></div>
                         </div>
-                      )}
-                    </>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsModelo046InfoOpen(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm font-bold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-all text-left"
+                        title="Instrucciones para cumplimentar el Modelo 046"
+                      >
+                        <HelpCircle size={26} className="shrink-0" />
+                        <span className="text-pretty">Instrucciones para la cumplimentación del modelo 046</span>
+                      </button>
+                    </div>
+                  )}
+                  {viewMode !== 'readonly' && formData.importeTotal && parseFloat(formData.importeTotal) > 0 && (
+                    <div className="md:col-span-2 rounded-2xl bg-amber-50 border border-amber-200 p-4 flex gap-3">
+                      <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-800 leading-relaxed">
+                        Será necesario adjuntar documentación acreditativa el pago de la tasa, con <strong>justificante del pago</strong> (no es válido copia de la autoliquidación). Hasta que no se aporte, la tramitación de la Solicitud de Matrícula quedará <strong>en suspenso</strong> y, transcurrido el plazo de matrícula sin haber aportado dicha documentación, su solicitud quedará <strong>desestimada</strong>.
+                      </p>
+                    </div>
                   )}
                 </motion.div>
               )}
             </AnimatePresence>
 
+                  {isModelo046ConfirmOpen && (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsModelo046ConfirmOpen(false)}
+                        className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[120]"
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl z-[130] border border-gray-100"
+                      >
+                        <div className="flex items-center justify-between mb-6">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-amber-500 text-white rounded-lg">
+                              <AlertCircle size={20} />
+                            </div>
+                            <h3 className="text-xl font-bold">Aviso importante</h3>
+                          </div>
+                          <button type="button" onClick={() => setIsModelo046ConfirmOpen(false)} className="p-2 hover:bg-gray-50 rounded-full transition-colors">
+                            <Music size={20} className="rotate-45" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-4">
+                          <p className="text-sm text-gray-700 leading-relaxed">
+                            Una vez realizado el pago a través del Modelo 046, deberá <strong>volver a este formulario</strong> y adjuntar el justificante de pago mediante la sección <strong>"Adjuntar Archivos"</strong> para completar la solicitud de matrícula.
+                          </p>
+                          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3">
+                            <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-800 leading-relaxed">
+                              Sin el justificante de pago adjunto, la tramitación de su solicitud quedará <strong>en suspenso</strong> y, transcurrido el plazo de matrícula, será <strong>desestimada</strong>.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-8 flex flex-col gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsModelo046ConfirmOpen(false);
+                              window.open('https://modelos-tributos.jccm.es/webgreco/modelos/jsp/cumplimentacion/GreJspModelo046_2012_P.jsp', '_blank', 'noopener,noreferrer');
+                            }}
+                            className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all"
+                          >
+                            Entiendo
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsModelo046ConfirmOpen(false)}
+                            className="w-full py-3 px-4 bg-gray-50 border border-gray-200 text-gray-700 rounded-xl font-bold text-sm text-center hover:bg-gray-100 transition-all"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
                   {isModelo046InfoOpen && (
                     <>
                       <motion.div
@@ -2657,28 +2717,12 @@ export default function App() {
 
           {/* Información Legal */}
           <section className="bg-gray-900 text-white rounded-[2rem] p-8 shadow-sm">
-            {viewMode !== 'readonly' && (
-              <>
-                <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
-                  <FileText size={20} className="text-gray-400" />
-                  <h2 className="text-base sm:text-xl font-semibold">Información y Autorización</h2>
-                </div>
-                <div className="space-y-4 text-sm text-gray-300 leading-relaxed max-h-48 overflow-y-auto pr-4 custom-scrollbar">
-                  <p className="font-bold text-white uppercase text-xs tracking-widest mb-2">Autorización para la publicación de imágenes</p>
-                  <p>
-                    Con la inclusión de las nuevas tecnologías dentro de los medios didácticos al alcance de la Comunidad Escolar, existe la posibilidad de que en éstos puedan aparecer imágenes del solicitante /sus hijos/as (en el caso de menores de edad) durante la realización de actividades escolares.
-                  </p>
-                  <p>
-                    Dado que el derecho a la propia imagen está reconocido en el artículo 18 de la Constitución y regulado por la Ley 1/1982, de 5 de mayo, sobre el derecho al honor, a la intimidad personal y familiar y la propia imagen, y la Ley 15/1999, de 13 de diciembre, sobre la Protección de Datos de Carácter Personal, la Dirección de este Conservatorio pide el consentimiento a los interesados o a los padres para poder publicar imágenes y/o grabaciones audiovisuales con carácter pedagógico y divulgativo.
-                  </p>
-                  <p className="font-bold text-white uppercase text-xs tracking-widest mt-4 mb-2">Protección de Datos</p>
-                  <p>
-                    En cumplimiento de lo dispuesto en la Ley Orgánica 15/1999, de 13 de diciembre, de Protección de Datos de Carácter Personal, se le informa que los datos personales obtenidos mediante este formulario serán incorporados al fichero de la aplicación de gestión académica. Puede ejercitar sus derechos de acceso, rectificación, cancelación y oposición dirigiendo un escrito a la Consejería competente en educación de la Junta de Comunidades de Castilla-La Mancha.
-                  </p>
-                </div>
-              </>
-            )}
-            <div className={viewMode !== 'readonly' ? 'mt-8 p-4 bg-white/5 rounded-2xl border border-white/10' : 'p-4 bg-white/5 rounded-2xl border border-white/10'}>
+            <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-6">
+              <FileText size={20} className="text-gray-400" />
+              <h2 className="text-base sm:text-xl font-semibold">Información y Autorización</h2>
+            </div>
+
+            <div className={viewMode !== 'readonly' ? 'p-4 bg-white/5 rounded-2xl border border-white/10' : 'p-4 bg-white/5 rounded-2xl border border-white/10'}>
               <p className="text-xs text-gray-400 mb-6 italic">
                 DECLARACIÓN: La persona abajo firmante DECLARA, bajo su expresa responsabilidad, que son ciertos los datos que figuran en la presente solicitud, así como en la documentación que se acompaña.
               </p>
@@ -2780,6 +2824,22 @@ export default function App() {
                 </>
               )}
             </div>
+
+            {viewMode !== 'readonly' && (
+              <div className="mt-8 space-y-4 text-sm text-gray-300 leading-relaxed max-h-48 overflow-y-auto pr-4 custom-scrollbar p-4 bg-white/5 rounded-2xl border border-white/10">
+                <p className="font-bold text-white uppercase text-xs tracking-widest mb-2">Autorización para la publicación de imágenes</p>
+                <p>
+                  Con la inclusión de las nuevas tecnologías dentro de los medios didácticos al alcance de la Comunidad Escolar, existe la posibilidad de que en éstos puedan aparecer imágenes del solicitante /sus hijos/as (en el caso de menores de edad) durante la realización de actividades escolares.
+                </p>
+                <p>
+                  Dado que el derecho a la propia imagen está reconocido en el artículo 18 de la Constitución y regulado por la Ley 1/1982, de 5 de mayo, sobre el derecho al honor, a la intimidad personal y familiar y la propia imagen, y la Ley 15/1999, de 13 de diciembre, sobre la Protección de Datos de Carácter Personal, la Dirección de este Conservatorio pide el consentimiento a los interesados o a los padres para poder publicar imágenes y/o grabaciones audiovisuales con carácter pedagógico y divulgativo.
+                </p>
+                <p className="font-bold text-white uppercase text-xs tracking-widest mt-4 mb-2">Protección de Datos</p>
+                <p>
+                  En cumplimiento de lo dispuesto en la Ley Orgánica 15/1999, de 13 de diciembre, de Protección de Datos de Carácter Personal, se le informa que los datos personales obtenidos mediante este formulario serán incorporados al fichero de la aplicación de gestión académica. Puede ejercitar sus derechos de acceso, rectificación, cancelación y oposición dirigiendo un escrito a la Consejería competente en educación de la Junta de Comunidades de Castilla-La Mancha.
+                </p>
+              </div>
+            )}
           </section>
         </form>
         </div>
