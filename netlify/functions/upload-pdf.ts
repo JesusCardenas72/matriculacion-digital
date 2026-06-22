@@ -93,7 +93,7 @@ async function createAsignaturaRecords(
   for (const m of asignaturas) {
     const payload: Record<string, unknown> = {
       cr955_codigomateria:   m.MATERIA,
-      cr955_name:            m.DESCRIPCION,
+      cr955_name:            tipo === 'Pendiente' ? `${m.DESCRIPCION} (${m.CURSO_N})` : m.DESCRIPCION,
       cr955_asignatura:      `${m.DESCRIPCION} — ${m.CURSO_N} ${m.ENSEÑANZAS} (${tipo})`,
       cr955_estadoasignatura: estadoChoice,
       'cr955_Matricula@odata.bind': `/cpmmr_matriculas(${matriculaId})`,

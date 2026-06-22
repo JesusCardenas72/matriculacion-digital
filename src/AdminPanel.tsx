@@ -141,7 +141,15 @@ function getDisplayOrden(s: Solicitud): string {
 
 // ─── Detail panel (tabs: tram / val / done) ───────────────────────────────────
 
-function DetailPanel({ sel }: { sel: Solicitud }) {
+function DetailPanel({
+  sel,
+  sustituyeFantasma,
+  onToggleFantasma,
+}: {
+  sel: Solicitud;
+  sustituyeFantasma: boolean;
+  onToggleFantasma: () => void;
+}) {
   const [notes, setNotes] = useState('');
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const academicYear = ACTIVE_ACADEMIC_YEAR;
@@ -356,6 +364,27 @@ function DetailPanel({ sel }: { sel: Solicitud }) {
             <Plus size={14} /> Añadir asignatura
           </button>
 
+          <label className={`flex items-center gap-3 px-4 py-3.5 rounded-xl border cursor-pointer transition-colors select-none ${
+            sustituyeFantasma
+              ? 'bg-amber-50 border-amber-200'
+              : 'bg-gray-50 border-gray-100 hover:bg-amber-50 hover:border-amber-200'
+          }`}>
+            <input
+              type="checkbox"
+              checked={sustituyeFantasma}
+              onChange={onToggleFantasma}
+              className="w-4 h-4 accent-orange-500 cursor-pointer flex-shrink-0"
+            />
+            <span className={`text-[13px] font-semibold ${sustituyeFantasma ? 'text-amber-800' : 'text-gray-700'}`}>
+              Sustituye al alumno Fantasma
+            </span>
+            {sustituyeFantasma && (
+              <span className="ml-auto text-[10px] font-bold uppercase tracking-wide text-amber-600 bg-amber-100 border border-amber-200 rounded px-2 py-0.5 flex-shrink-0">
+                Activo
+              </span>
+            )}
+          </label>
+
           <div>
             <SectionHead title="Notas del Administrador" count={0} colorClass="text-gray-400" Icon={FileText} />
             <textarea
@@ -509,7 +538,13 @@ function DetailPanel({ sel }: { sel: Solicitud }) {
 
 // ─── Local tab ─────────────────────────────────────────────────────────────────
 
-function LocalPanel() {
+function LocalPanel({
+  sustituyeFantasma,
+  onToggleFantasma,
+}: {
+  sustituyeFantasma: Record<string, boolean>;
+  onToggleFantasma: (id: string) => void;
+}) {
   return (
     <div className="p-7 max-w-4xl">
       {/* Info banner */}
@@ -533,41 +568,67 @@ function LocalPanel() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {LOCAL_SOLICITUDES.map((d, i) => (
-            <div key={d.id} className="bg-white border border-gray-100 rounded-2xl px-6 py-5 flex items-center gap-4 shadow-sm">
-              {/* Editorial number */}
-              <div
-                className="font-display leading-none tracking-tighter text-gray-200 w-14 text-center flex-shrink-0 select-none"
-                style={{ fontSize: 48 }}
-              >
-                {String(i + 1).padStart(2, '0')}
-              </div>
+          {LOCAL_SOLICITUDES.map((d, i) => {
+            const isFantasma = !!sustituyeFantasma[d.id];
+            return (
+              <div key={d.id} className="bg-white border border-gray-100 rounded-2xl px-6 py-5 flex flex-col gap-4 shadow-sm">
+                <div className="flex items-center gap-4">
+                  {/* Editorial number */}
+                  <div
+                    className="font-display leading-none tracking-tighter text-gray-200 w-14 text-center flex-shrink-0 select-none"
+                    style={{ fontSize: 48 }}
+                  >
+                    {String(i + 1).padStart(2, '0')}
+                  </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-gray-900 text-[14px] mb-1.5">{d.nombre}</div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-1.5 py-0.5 bg-gray-100 rounded-md text-[11px] font-bold text-gray-700">{d.curso}</span>
-                  <span className="text-xs text-gray-400">{d.especialidad}</span>
-                  <span className="text-gray-300 mx-1">·</span>
-                  <Clock size={11} className="text-gray-400" />
-                  <span className="text-xs text-gray-400">{d.recibida}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-gray-900 text-[14px] mb-1.5">{d.nombre}</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-1.5 py-0.5 bg-gray-100 rounded-md text-[11px] font-bold text-gray-700">{d.curso}</span>
+                      <span className="text-xs text-gray-400">{d.especialidad}</span>
+                      <span className="text-gray-300 mx-1">·</span>
+                      <Clock size={11} className="text-gray-400" />
+                      <span className="text-xs text-gray-400">{d.recibida}</span>
+                    </div>
+                  </div>
+
+                  <span className="px-2.5 py-1 bg-orange-50 text-orange-600 rounded-lg text-[11px] font-bold border border-orange-200 flex-shrink-0">
+                    Local
+                  </span>
+
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-xl text-sm font-semibold hover:bg-orange-600 transition-colors">
+                      <CheckCircle2 size={14} /> Tramitar
+                    </button>
+                    <button className="w-9 h-9 border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors flex items-center justify-center">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <span className="px-2.5 py-1 bg-orange-50 text-orange-600 rounded-lg text-[11px] font-bold border border-orange-200 flex-shrink-0">
-                Local
-              </span>
-
-              <div className="flex gap-2 flex-shrink-0">
-                <button className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-xl text-sm font-semibold hover:bg-orange-600 transition-colors">
-                  <CheckCircle2 size={14} /> Tramitar
-                </button>
-                <button className="w-9 h-9 border border-gray-200 rounded-xl text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors flex items-center justify-center">
-                  <Trash2 size={14} />
-                </button>
+                <label className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors select-none ${
+                  isFantasma
+                    ? 'bg-amber-50 border-amber-200'
+                    : 'bg-gray-50 border-gray-100 hover:bg-amber-50 hover:border-amber-200'
+                }`}>
+                  <input
+                    type="checkbox"
+                    checked={isFantasma}
+                    onChange={() => onToggleFantasma(d.id)}
+                    className="w-4 h-4 accent-orange-500 cursor-pointer flex-shrink-0"
+                  />
+                  <span className={`text-[13px] font-semibold ${isFantasma ? 'text-amber-800' : 'text-gray-700'}`}>
+                    Sustituye al alumno Fantasma
+                  </span>
+                  {isFantasma && (
+                    <span className="ml-auto text-[10px] font-bold uppercase tracking-wide text-amber-600 bg-amber-100 border border-amber-200 rounded px-2 py-0.5 flex-shrink-0">
+                      Activo
+                    </span>
+                  )}
+                </label>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -695,6 +756,10 @@ export default function AdminPanel() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'urls' | 'options'>('options');
   const { year: academicYear, setYear: setAcademicYear } = useAcademicYear();
+  const [sustituyeFantasma, setSustituyeFantasma] = useState<Record<string, boolean>>({});
+
+  const toggleFantasma = (id: string | number) =>
+    setSustituyeFantasma(prev => ({ ...prev, [String(id)]: !prev[String(id)] }));
 
   const isMainTab = tab === 'tram' || tab === 'val' || tab === 'done';
   const selData = SOLICITUDES.find(s => s.id === selectedId)!;
@@ -858,10 +923,19 @@ export default function AdminPanel() {
         <main className="flex-1 overflow-y-auto">
           {isMainTab && (
             <div className="p-6">
-              <DetailPanel sel={selData} />
+              <DetailPanel
+                sel={selData}
+                sustituyeFantasma={!!sustituyeFantasma[String(selData.id)]}
+                onToggleFantasma={() => toggleFantasma(selData.id)}
+              />
             </div>
           )}
-          {tab === 'local'   && <LocalPanel />}
+          {tab === 'local' && (
+            <LocalPanel
+              sustituyeFantasma={sustituyeFantasma}
+              onToggleFantasma={toggleFantasma}
+            />
+          )}
           {tab === 'reports' && <InformesPanel />}
         </main>
       </div>
