@@ -9,6 +9,32 @@ export interface Materia {
   ESPECIALIDAD: string;
 }
 
+// ── Salvaguarda: asignaturas restringidas a ciertas especialidades ──────────
+// La asignatura "Orquesta" (ABREVIATURA "ORQ") SOLO existe en las especialidades
+// de cuerda frotada. El resto de especialidades cursan "Banda", nunca "Orquesta".
+// Los datos de origen (materias.json) arrastran de forma recurrente entradas de
+// "Orquesta" en especialidades donde no corresponde (p. ej. Clarinete), por lo que
+// filtramos aquí de forma centralizada para que nunca vuelva a aparecer.
+const ESPECIALIDADES_CON_ORQUESTA = new Set([
+  'Contrabajo',
+  'Viola',
+  'Violín',
+  'Violoncello',
+]);
+
+function esOrquesta(m: Materia): boolean {
+  return (
+    m.ABREVIATURA?.toUpperCase() === 'ORQ' ||
+    m.DESCRIPCION?.trim().toLowerCase() === 'orquesta'
+  );
+}
+
+function sanitizeMaterias(materias: Materia[]): Materia[] {
+  return materias.filter(
+    m => !esOrquesta(m) || ESPECIALIDADES_CON_ORQUESTA.has(m.ESPECIALIDAD)
+  );
+}
+
 let materiasCache: Materia[] | null = null;
 let loadingPromise: Promise<Materia[]> | null = null;
 
@@ -21,7 +47,7 @@ export async function loadMaterias(): Promise<Materia[]> {
       return res.json();
     })
     .then(data => {
-      materiasCache = data as Materia[];
+      materiasCache = sanitizeMaterias(data as Materia[]);
       return materiasCache;
     })
     .catch(err => {
