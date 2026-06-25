@@ -37,17 +37,30 @@ import { useAcademicYear } from './hooks/useAcademicYear';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ⛔ TEMPORAL — RESTRICCIÓN PERFIL C en 5º y 6º Profesional ────────────────────
-// Mientras esté en `true`, los alumnos de EP5 y EP6 solo pueden elegir Perfil C:
-// los perfiles A y B aparecen deshabilitados y muestran una modal informativa.
+
+
+// ⛔ TEMPORAL — RESTRICCIÓN MATRÍCULA (plazo limitado) ─────────────────────────
+// Mientras esté en `true`, se aplican las siguientes restricciones:
 //
-// PARA ELIMINAR LA LIMITACIÓN cuando se indique:
+// 1. DATOS DE MATRICULACIÓN:
+//    - Solo disponible "Enseñanza Elemental" (Profesional atenuado)
+//    - Curso forzado a "1º" (bloqueado)
+//    - Repetidor forzado a "No" (bloqueado)
+//    - Campos de Asignatura Pendiente deshabilitados
+//
+// 2. FORMA DE PAGO:
+//    - Todas las reducciones/exenciones disponibles EXCEPTO "Matrícula de Honor"
+//    - "Primer año en el centro" activado por defecto y bloqueado (no se puede desmarcar)
+//
+// 3. DISPONIBILIDAD HORARIA:
+//    - "Disponibilidad horaria de mañana" forzada a "No" (bloqueada)
+//
+// PARA ELIMINAR LA LIMITACIÓN cuando finalice el plazo:
 //   Opción rápida → poner esta constante en `false` (la UI vuelve a su estado original).
-//   Limpieza total → buscar todos los bloques marcados con "RESTRICCION_PERFIL_C_EP56"
-//                    en este archivo y borrarlos (incluida esta constante, el estado
-//                    `isPerfilCOnlyModalOpen`, el cálculo `isEP5or6`, la rama de
-//                    auto-selección en handleChange y la modal del mismo nombre).
-const RESTRICCION_PERFIL_C_EP56 = true;
+//   Limpieza total → buscar todos los bloques marcados con "RESTRICCION_TEMPORAL_MATRICULA"
+//                    en este archivo y borrarlos (incluida esta constante, los `disabled`
+//                    condicionales, los `useEffect` de auto-selección y los estilos atenuados).
+const RESTRICCION_TEMPORAL_MATRICULA = true;
 // ──────────────────────────────────────────────────────────────────────────────
 
 type FieldError = { key: string; message: string };
@@ -126,6 +139,22 @@ export default function App() {
       .finally(() => setMateriasLoading(false));
   }, []);
 
+  // RESTRICCION_TEMPORAL_MATRICULA — forzar valores iniciales cuando la restricción está activa
+  useEffect(() => {
+    if (RESTRICCION_TEMPORAL_MATRICULA) {
+      setFormData(prev => ({
+        ...prev,
+        tipoEnsenanza: 'elemental',
+        curso: '1º',
+        esRepetidor: false,
+        esPrimerAno: true,
+        disponibilidadManana: false,
+        matriculaHonor: false,
+      }));
+    }
+  }, []);
+  // /RESTRICCION_TEMPORAL_MATRICULA
+
   const validateField = useCallback((name: string, value: string) => {
     let error: string | null = null;
     const trimmed = value.trim();
@@ -182,7 +211,7 @@ export default function App() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitTimestamp, setSubmitTimestamp] = useState<Date | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [isPerfilCOnlyModalOpen, setIsPerfilCOnlyModalOpen] = useState(false); // RESTRICCION_PERFIL_C_EP56
+
 
   // ── Endpoints directos a Power Automate (sin backend intermedio) ────────────
   const PA_DUPLICADOS_URL = 'https://c627b3c984dee98bb3d3cffe8c91c0.4d.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/b62c3d4b21d24bda8daa75a8586198eb/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=4nqPljifCY1CBxAiKj03La2YEksNn78meKn9-nlXGCk';
@@ -450,11 +479,6 @@ export default function App() {
     );
   }, [formData.formaPago, formData.tipoReduccion, calculation]);
 
-  // RESTRICCION_PERFIL_C_EP56 — true solo cuando la restricción está activa y el
-  // curso actual es EP5 o EP6. Si el flag se pone en false, vale siempre false y
-  // toda la UI/lógica condicionada vuelve a su comportamiento original.
-  const isEP5or6 = RESTRICCION_PERFIL_C_EP56 && formData.tipoEnsenanza === 'profesional' && (formData.curso.includes('5') || formData.curso.includes('6'));
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     let val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
@@ -465,12 +489,6 @@ export default function App() {
     // dobles, iniciales y finales. Ver tests en src/__tests__/whitespace.test.ts.
     if (typeof val === 'string') {
       val = sanitizeFieldValue(name, val);
-    }
-
-    // RESTRICCION_PERFIL_C_EP56 — EP5 y EP6 solo pueden elegir Perfil C.
-    if (name === 'perfilProfesional' && isEP5or6 && val !== 'C') {
-      setIsPerfilCOnlyModalOpen(true);
-      return;
     }
 
     if (name === 'formaPago' && (val === 'unico' || val === 'fraccionado')) {
@@ -504,13 +522,7 @@ export default function App() {
         }
       }
       if (name === 'curso' || name === 'especialidad') {
-        // RESTRICCION_PERFIL_C_EP56 — auto-seleccionar Perfil C al elegir EP5/EP6.
-        // Si el flag está en false, este `if` nunca entra y se ejecuta el reset normal.
-        if (RESTRICCION_PERFIL_C_EP56 && name === 'curso' && newData.tipoEnsenanza === 'profesional' && (val === '5º' || val === '6º')) {
-          newData.perfilProfesional = 'C';
-        } else {
-          newData.perfilProfesional = '';
-        }
+        newData.perfilProfesional = '';
         newData.asignaturaPendiente1 = '';
         newData.asignaturaPendiente2 = '';
         newData.esRepetidor = false;
@@ -1676,13 +1688,14 @@ export default function App() {
                   />
                   <span className="text-sm font-bold uppercase tracking-wider text-gray-600 group-hover:text-gray-900">Enseñanza Elemental</span>
                 </label>
-                <label className="flex items-center gap-3 cursor-pointer group">
+                <label className={`flex items-center gap-3 ${RESTRICCION_TEMPORAL_MATRICULA ? 'cursor-not-allowed opacity-40' : 'cursor-pointer group'}`}>
                   <input 
                     type="radio" 
                     name="tipoEnsenanza" 
                     value="profesional" 
                     checked={formData.tipoEnsenanza === 'profesional'}
                     onChange={handleChange}
+                    disabled={RESTRICCION_TEMPORAL_MATRICULA}
                     className="w-5 h-5 text-gray-900 border-gray-300 focus:ring-gray-900"
                   />
                   <span className="text-sm font-bold uppercase tracking-wider text-gray-600 group-hover:text-gray-900">Enseñanza Profesional</span>
@@ -1692,7 +1705,7 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Curso</label>
-                  <select required name="curso" value={formData.curso} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
+                  <select required name="curso" value={formData.curso} onChange={handleChange} disabled={RESTRICCION_TEMPORAL_MATRICULA} className={`w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none ${RESTRICCION_TEMPORAL_MATRICULA ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                     <option value="" disabled>Seleccionar curso...</option>
                     {cursos.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -1726,13 +1739,14 @@ export default function App() {
                       type="button"
                       role="switch"
                       aria-checked={!!formData.esRepetidor}
+                      disabled={RESTRICCION_TEMPORAL_MATRICULA}
                       onClick={() => {
                         const syntheticEvent = {
                           target: { name: 'esRepetidor', value: '', type: 'checkbox', checked: !formData.esRepetidor },
                         } as React.ChangeEvent<HTMLInputElement>;
                         handleChange(syntheticEvent);
                       }}
-                      className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 ${formData.esRepetidor ? 'bg-gray-900' : 'bg-gray-200'}`}
+                      className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 ${formData.esRepetidor ? 'bg-gray-900' : 'bg-gray-200'} ${RESTRICCION_TEMPORAL_MATRICULA ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${formData.esRepetidor ? 'translate-x-8' : 'translate-x-1'}`} />
                     </button>
@@ -1761,7 +1775,7 @@ export default function App() {
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">
                     {isRepetidor ? 'Asignatura pendiente del curso repetido' : 'Asignatura pendiente 1'}
                   </label>
-                    <select name="asignaturaPendiente1" value={formData.asignaturaPendiente1} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
+                    <select name="asignaturaPendiente1" value={formData.asignaturaPendiente1} onChange={handleChange} disabled={RESTRICCION_TEMPORAL_MATRICULA} className={`w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none ${RESTRICCION_TEMPORAL_MATRICULA ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                       <option value="">Ninguna...</option>
                       {(isRepetidor ? asignaturasParaRepetidor : asignaturasPrevias).map(a => (
                         <option key={a.id} value={a.id}>
@@ -1773,7 +1787,7 @@ export default function App() {
                   {(formData.tipoEnsenanza === 'profesional' && !isRepetidor) && (
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Asignatura pendiente 2</label>
-                      <select name="asignaturaPendiente2" value={formData.asignaturaPendiente2} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
+                      <select name="asignaturaPendiente2" value={formData.asignaturaPendiente2} onChange={handleChange} disabled={RESTRICCION_TEMPORAL_MATRICULA} className={`w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none ${RESTRICCION_TEMPORAL_MATRICULA ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                         <option value="">Ninguna...</option>
                         {asignaturasPrevias.map(a => (
                           <option key={a.id} value={a.id}>
@@ -1786,7 +1800,7 @@ export default function App() {
                   {(isRepetidor && formData.tipoEnsenanza === 'profesional') && (
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">2ª Asignatura pendiente del curso repetido</label>
-                      <select name="asignaturaPendiente2" value={formData.asignaturaPendiente2} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
+                      <select name="asignaturaPendiente2" value={formData.asignaturaPendiente2} onChange={handleChange} disabled={RESTRICCION_TEMPORAL_MATRICULA} className={`w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none ${RESTRICCION_TEMPORAL_MATRICULA ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                         <option value="">Ninguna...</option>
                         {asignaturasParaRepetidor.map(a => (
                           <option key={a.id} value={a.id}>
@@ -1883,26 +1897,20 @@ export default function App() {
                     exit={{ opacity: 0, height: 0 }}
                     className="pt-6 border-t border-gray-50"
                   >
-                    {/* RESTRICCION_PERFIL_C_EP56 — la etiqueta y `isDisabled` dependen de isEP5or6.
-                        Con el flag en false, isEP5or6 es siempre false: se muestra el texto original
-                        y ningún perfil queda deshabilitado. */}
-                    <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-4">{isEP5or6 ? '⚠️ Solo Perfil C disponible en 5º y 6º Profesional' : 'Elegir un único perfil (Solo 5º y 6º Profesional)'}</label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-gray-400 block mb-4">Elegir un único perfil (Solo 5º y 6º Profesional)</label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {[
                         { id: 'A', label: 'Perfil A', desc: 'Fundamentos de Composición' },
                         { id: 'B', label: 'Perfil B', desc: formData.curso.includes('5') ? 'Improvisación / Informática Musical' : 'Didáctica musical / Improvisación' },
                         { id: 'C', label: 'Perfil C', desc: formData.curso.includes('5') ? 'Improvisación / Coro 1' : 'Música moderna / Coro 2' },
                       ].map((perfil) => {
-                        const isDisabled = isEP5or6 && perfil.id !== 'C'; // RESTRICCION_PERFIL_C_EP56
                         return (
                           <label
                             key={perfil.id}
                             className={`p-4 rounded-2xl border-2 transition-all flex flex-col gap-1 ${
-                              isDisabled
-                                ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed opacity-50'
-                                : formData.perfilProfesional === perfil.id
-                                  ? 'border-gray-900 bg-gray-900 text-white cursor-pointer'
-                                  : 'border-gray-100 bg-gray-50 hover:border-gray-200 cursor-pointer'
+                              formData.perfilProfesional === perfil.id
+                                ? 'border-gray-900 bg-gray-900 text-white cursor-pointer'
+                                : 'border-gray-100 bg-gray-50 hover:border-gray-200 cursor-pointer'
                             }`}
                           >
                             <input
@@ -1914,7 +1922,7 @@ export default function App() {
                               className="sr-only"
                             />
                             <span className="font-bold text-sm">{perfil.label}</span>
-                            <span className={`text-xs ${formData.perfilProfesional === perfil.id && !isDisabled ? 'text-gray-300' : isDisabled ? 'text-gray-400' : 'text-gray-500'}`}>{perfil.desc}</span>
+                            <span className={`text-xs ${formData.perfilProfesional === perfil.id ? 'text-gray-300' : 'text-gray-500'}`}>{perfil.desc}</span>
                           </label>
                         );
                       })}
@@ -2128,14 +2136,14 @@ export default function App() {
                             <div className="relative group">
                               <button
                                 type="button"
-                                disabled={formData.tipoReduccion !== 'ninguna' && formData.tipoReduccion !== 'fam_num_general' && formData.tipoReduccion !== ''}
+                                disabled={RESTRICCION_TEMPORAL_MATRICULA || (formData.tipoReduccion !== 'ninguna' && formData.tipoReduccion !== 'fam_num_general' && formData.tipoReduccion !== '')}
                                 onClick={() => {
                                   setFormData(prev => ({ ...prev, matriculaHonor: !prev.matriculaHonor }));
                                   setIsExemptionModalOpen(false);
                                 }}
                                 className={`w-full p-4 rounded-2xl border-2 text-left transition-all flex flex-col gap-1 pr-16
                                   ${formData.matriculaHonor ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-50 bg-gray-50 hover:border-gray-200'}
-                                  ${(formData.tipoReduccion !== 'ninguna' && formData.tipoReduccion !== 'fam_num_general' && formData.tipoReduccion !== '') ? 'opacity-40 cursor-not-allowed' : ''}
+                                  ${RESTRICCION_TEMPORAL_MATRICULA || (formData.tipoReduccion !== 'ninguna' && formData.tipoReduccion !== 'fam_num_general' && formData.tipoReduccion !== '') ? 'opacity-40 cursor-not-allowed' : ''}
                                 `}
                               >
                                 <span className="font-bold text-sm">Matrícula de Honor</span>
@@ -2513,66 +2521,18 @@ export default function App() {
                     </>
                   )}
                 </AnimatePresence>
-
-                {/* RESTRICCION_PERFIL_C_EP56 — modal informativa "Solo Perfil C" (bloque temporal, borrar al levantar la limitación) */}
-                <AnimatePresence>
-                  {isPerfilCOnlyModalOpen && (
-                    <>
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setIsPerfilCOnlyModalOpen(false)}
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100]"
-                      />
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-10 shadow-2xl z-[110] border border-blue-100"
-                      >
-                        <div className="flex items-center gap-4 mb-8">
-                          <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
-                            <AlertCircle size={32} />
-                          </div>
-                          <div>
-                            <h3 className="text-2xl font-black text-gray-900 leading-tight">Solo Perfil C disponible</h3>
-                            <p className="text-sm text-gray-500 font-medium uppercase tracking-wider mt-1">Restricción temporal</p>
-                          </div>
-                        </div>
-
-                        <div className="bg-blue-50 rounded-3xl p-8 mb-8 border border-blue-200">
-                          <p className="text-base text-blue-900 leading-relaxed font-semibold">
-                            A partir de ahora, los alumnos de 5º y 6º de Enseñanza Profesional solo pueden elegir el <strong>Perfil C</strong>.
-                          </p>
-                          <p className="text-sm text-blue-800 mt-4">
-                            Esta es una restricción temporal mientras se definen las nuevas opciones de especialización.
-                          </p>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setIsPerfilCOnlyModalOpen(false)}
-                          className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
-                        >
-                          Entendido
-                        </button>
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-                {/* /RESTRICCION_PERFIL_C_EP56 */}
               </div>
             </div>
 
             <div className="grid grid-cols-1 gap-6 mb-8">
               <div className="relative group">
-                <label className="flex items-center gap-3 cursor-pointer p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all pr-16">
+                <label className={`flex items-center gap-3 p-4 bg-gray-50 rounded-xl transition-all pr-16 ${RESTRICCION_TEMPORAL_MATRICULA ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-100'}`}>
                   <input 
                     type="checkbox" 
                     name="esPrimerAno" 
                     checked={formData.esPrimerAno}
                     onChange={handleChange}
+                    disabled={RESTRICCION_TEMPORAL_MATRICULA}
                     className="w-5 h-5 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
                   />
                   <div className="flex flex-col">
