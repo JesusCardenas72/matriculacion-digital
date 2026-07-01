@@ -131,6 +131,27 @@ export default function App() {
   const [materiasIndex, setMateriasIndex] = useState<MateriasIndex | null>(null);
   const [materiasLoading, setMateriasLoading] = useState(true);
   const { year: academicYear } = useAcademicYear();
+  const [sinDniDni, setSinDniDni] = useState('');
+
+  function generateRandomDni(): string {
+    const LETTERS = 'TRWAGMYFPDXBNJZSQVHLCKE';
+    const randomDigits = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+    const numberPart = `99${randomDigits}`;
+    return numberPart + LETTERS[parseInt(numberPart, 10) % 23];
+  }
+
+  const handleSinDniToggle = useCallback(() => {
+    if (sinDniDni) {
+      setSinDniDni('');
+      setFormData(prev => ({ ...prev, dni: '' }));
+      setFieldErrors(prev => { const c = { ...prev }; delete c.dni; return c; });
+    } else {
+      const generated = generateRandomDni();
+      setSinDniDni(generated);
+      setFormData(prev => ({ ...prev, dni: generated }));
+      setFieldErrors(prev => { const c = { ...prev }; delete c.dni; return c; });
+    }
+  }, [sinDniDni]);
 
   useEffect(() => {
     loadMaterias()
@@ -550,6 +571,7 @@ export default function App() {
   };
 
   const handleDniBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    if (sinDniDni) return;
     const name = e.target.name;
     const raw = e.target.value.trim().toUpperCase();
     if (!raw) return;
@@ -576,24 +598,39 @@ export default function App() {
       setFormData(prev => ({ ...prev, [name]: formatted }));
       validateField(name, formatted);
     }
-  }, [validateField]);
+  }, [validateField, sinDniDni]);
 
   // Normaliza a tipo título al salir del campo: primera letra de cada palabra
   // en mayúscula, excepto palabras menores (de, el, la, que, del, los, las, y,
   // e, en, con, por, para, un, una) que permanecen en minúscula a menos que
   // sean la primera palabra del texto. Preserva espacios dobles e iniciales.
+  // Las palabras compuestas con guión (p.ej. García-López) se capitalizan
+  // en cada segmento.
+  // En el campo Domicilio también capitaliza letras después de dígitos o
+  // símbolos (p.ej. "2ºa" → "2ºA").
   const MINOR_WORDS = new Set(['de', 'el', 'la', 'que', 'del', 'los', 'las', 'y', 'e', 'en', 'con', 'por', 'para', 'un', 'una']);
   const handleTitleCaseBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     if (!value) return;
     const words = value.toLocaleLowerCase('es-ES').split(/(\s+)/);
     let first = true;
-    const formatted = words.map(w => {
+    let formatted = words.map(w => {
       if (!w.trim()) return w;
+      if (w.includes('-')) {
+        const parts = w.split('-');
+        const formattedParts = parts.map(p => {
+          if (first) first = false;
+          return p.charAt(0).toLocaleUpperCase('es-ES') + p.slice(1);
+        });
+        return formattedParts.join('-');
+      }
       if (first) { first = false; return w.charAt(0).toLocaleUpperCase('es-ES') + w.slice(1); }
       if (MINOR_WORDS.has(w)) return w;
       return w.charAt(0).toLocaleUpperCase('es-ES') + w.slice(1);
     }).join('');
+    if (name === 'domicilio') {
+      formatted = formatted.replace(/(?<=[\dºª°])[a-záéíóúüñ]/g, m => m.toLocaleUpperCase('es-ES'));
+    }
     if (formatted !== value) {
       setFormData(prev => ({ ...prev, [name]: formatted }));
     }
@@ -1314,6 +1351,7 @@ export default function App() {
                   setAttachments([]);
                   setEncryptedPdfNames([]);
                   setValidationErrors([]);
+                  setSinDniDni('');
                   setFormData({
                     nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: '', convalidacionSolicitada: false, convalidacionAsignaturas: [], convalidacionMotivo: '',
                   });
@@ -1395,6 +1433,7 @@ export default function App() {
                   setAttachments([]);
                   setEncryptedPdfNames([]);
                   setValidationErrors([]);
+                  setSinDniDni('');
                   setFormData({
                     nombre: '', apellidos: '', dni: '', fechaNacimiento: '', domicilio: '', localidad: '', provincia: 'Ciudad Real', codigoPostal: '', email: '', telefono: '', horaSalidaEstudios: '', disponibilidadManana: false, autorizacionImagen: false, tutor1Nombre: '', tutor1Dni: '', tutor2Nombre: '', tutor2Dni: '', tipoEnsenanza: '', curso: '', especialidad: '', asignaturaPendiente1: '', asignaturaPendiente2: '', perfilProfesional: '', formaPago: '', familiaNumerosa: false, tipoReduccion: 'ninguna', matriculaHonor: false, esPrimerAno: false, importeTotal: '', importe1erPago: '', importe2oPago: '', convalidacionSolicitada: false, convalidacionAsignaturas: [], convalidacionMotivo: '',
                   });
@@ -1526,7 +1565,12 @@ export default function App() {
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I. / N.I.E.</label>
-                <input required name="dni" value={formData.dni} onChange={handleChange} onBlur={handleDniBlur} className={`w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.dni ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'}`} maxLength={9} placeholder="12345678X o X1234567B" />
+                <div className="flex gap-2">
+                  <input required name="dni" value={sinDniDni ? 'Sin DNI' : formData.dni} onChange={handleChange} onBlur={handleDniBlur} disabled={!!sinDniDni} className={`flex-1 w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.dni ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'} ${sinDniDni ? 'text-gray-400 italic cursor-not-allowed' : ''}`} maxLength={9} placeholder="12345678X o X1234567B" />
+                  <button type="button" onClick={handleSinDniToggle} className={`px-3 py-2 sm:px-4 sm:py-3 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${sinDniDni ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                    {sinDniDni ? 'Tiene DNI' : 'Sin DNI'}
+                  </button>
+                </div>
                 {fieldErrors.dni && <p className="text-red-500 text-xs mt-1 ml-1">{fieldErrors.dni}</p>}
               </div>
               <div className="space-y-1">
