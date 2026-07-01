@@ -2859,7 +2859,7 @@ export default function App() {
                           </button>
                         </div>
 
-                        <div className="space-y-4">
+                        <div className="space-y-4 overflow-y-auto max-h-[50vh] pr-1">
                           <p className="text-sm font-bold text-gray-700 uppercase tracking-widest text-[11px]">Instrucciones para la cumplimentación del modelo 046</p>
                           <ul className="space-y-3 text-sm text-gray-700 leading-relaxed">
                             <li className="flex gap-2">
@@ -2880,11 +2880,27 @@ export default function App() {
                             </li>
                             <li className="flex gap-2">
                               <span className="text-gray-400 shrink-0">–</span>
-                              <span>En la nueva ventana ingresar los datos solicitados (fecha de devengo, datos personales del pagador).</span>
+                              <span><strong>Fecha de devengo (pto. 2):</strong> poner el día en el que se va a realizar el rellenado del Modelo 046 y el pago.</span>
                             </li>
                             <li className="flex gap-2">
                               <span className="text-gray-400 shrink-0">–</span>
-                              <span><strong>Descripción:</strong> Enseñanzas Elementales o Profesionales de Música, especialidad y curso. También se hará constar si tiene algún tipo de bonificación o exención.</span>
+                              <span>En la nueva ventana ingresar los datos solicitados (fecha de devengo, datos personales del pagador) <strong>(Ptos. 5 al 18)</strong>.</span>
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-gray-400 shrink-0">–</span>
+                              <span><strong>Descripción (pto. 57):</strong> Enseñanzas Elementales o Profesionales de Música, especialidad y curso. También se hará constar si tiene algún tipo de bonificación o exención.</span>
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-gray-400 shrink-0">–</span>
+                              <span><strong>Total a Ingresar (Pto. 80):</strong> poner la misma cantidad a pagar que corresponda calculado por el modelo de Matrícula, en la sección Forma de Pago (no olvide revisar las <strong>"Reducciones o Exenciones de Tasas"</strong>, para que realice el cálculo correctamente).</span>
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-gray-400 shrink-0">–</span>
+                              <span><strong>Lugar de firma (Pto. D):</strong> Indique la localidad desde donde realiza el pago.</span>
+                            </li>
+                            <li className="flex gap-2">
+                              <span className="text-gray-400 shrink-0">–</span>
+                              <span><strong>Validar → Pagar (SIN CERTIFICADO ELECTRÓNICO)</strong></span>
                             </li>
                           </ul>
                         </div>
