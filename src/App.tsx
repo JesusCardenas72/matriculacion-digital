@@ -35,34 +35,6 @@ import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, valida
 import { getCurrentCalendarYear } from './config/academicYear';
 import { useAcademicYear } from './hooks/useAcademicYear';
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-
-
-// ⛔ TEMPORAL — RESTRICCIÓN MATRÍCULA (plazo limitado) ─────────────────────────
-// Mientras esté en `true`, se aplican las siguientes restricciones:
-//
-// 1. DATOS DE MATRICULACIÓN:
-//    - Solo disponible "Enseñanza Elemental" (Profesional atenuado)
-//    - Curso forzado a "1º" (bloqueado)
-//    - Repetidor forzado a "No" (bloqueado)
-//    - Campos de Asignatura Pendiente deshabilitados
-//
-// 2. FORMA DE PAGO:
-//    - Todas las reducciones/exenciones disponibles EXCEPTO "Matrícula de Honor"
-//    - "Primer año en el centro" activado por defecto y bloqueado (no se puede desmarcar)
-//
-// 3. DISPONIBILIDAD HORARIA:
-//    - "Disponibilidad horaria de mañana" forzada a "No" (bloqueada)
-//
-// PARA ELIMINAR LA LIMITACIÓN cuando finalice el plazo:
-//   Opción rápida → poner esta constante en `false` (la UI vuelve a su estado original).
-//   Limpieza total → buscar todos los bloques marcados con "RESTRICCION_TEMPORAL_MATRICULA"
-//                    en este archivo y borrarlos (incluida esta constante, los `disabled`
-//                    condicionales, los `useEffect` de auto-selección y los estilos atenuados).
-const RESTRICCION_TEMPORAL_MATRICULA = true;
-// ──────────────────────────────────────────────────────────────────────────────
-
 type FieldError = { key: string; message: string };
 
 export default function App() {
@@ -160,21 +132,7 @@ export default function App() {
       .finally(() => setMateriasLoading(false));
   }, []);
 
-  // RESTRICCION_TEMPORAL_MATRICULA — forzar valores iniciales cuando la restricción está activa
-  useEffect(() => {
-    if (RESTRICCION_TEMPORAL_MATRICULA) {
-      setFormData(prev => ({
-        ...prev,
-        tipoEnsenanza: 'elemental',
-        curso: '1º',
-        esRepetidor: false,
-        esPrimerAno: true,
-        disponibilidadManana: false,
-        matriculaHonor: false,
-      }));
-    }
-  }, []);
-  // /RESTRICCION_TEMPORAL_MATRICULA
+
 
   const validateField = useCallback((name: string, value: string) => {
     let error: string | null = null;
@@ -1732,14 +1690,13 @@ export default function App() {
                   />
                   <span className="text-sm font-bold uppercase tracking-wider text-gray-600 group-hover:text-gray-900">Enseñanza Elemental</span>
                 </label>
-                <label className={`flex items-center gap-3 ${RESTRICCION_TEMPORAL_MATRICULA ? 'cursor-not-allowed opacity-40' : 'cursor-pointer group'}`}>
+                <label className="flex items-center gap-3 cursor-pointer group">
                   <input 
                     type="radio" 
                     name="tipoEnsenanza" 
                     value="profesional" 
                     checked={formData.tipoEnsenanza === 'profesional'}
                     onChange={handleChange}
-                    disabled={RESTRICCION_TEMPORAL_MATRICULA}
                     className="w-5 h-5 text-gray-900 border-gray-300 focus:ring-gray-900"
                   />
                   <span className="text-sm font-bold uppercase tracking-wider text-gray-600 group-hover:text-gray-900">Enseñanza Profesional</span>
@@ -1749,7 +1706,7 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Curso</label>
-                  <select required name="curso" value={formData.curso} onChange={handleChange} disabled={RESTRICCION_TEMPORAL_MATRICULA} className={`w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none ${RESTRICCION_TEMPORAL_MATRICULA ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                  <select required name="curso" value={formData.curso} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
                     <option value="" disabled>Seleccionar curso...</option>
                     {cursos.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -1783,14 +1740,13 @@ export default function App() {
                       type="button"
                       role="switch"
                       aria-checked={!!formData.esRepetidor}
-                      disabled={RESTRICCION_TEMPORAL_MATRICULA}
                       onClick={() => {
                         const syntheticEvent = {
                           target: { name: 'esRepetidor', value: '', type: 'checkbox', checked: !formData.esRepetidor },
                         } as React.ChangeEvent<HTMLInputElement>;
                         handleChange(syntheticEvent);
                       }}
-                      className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 ${formData.esRepetidor ? 'bg-gray-900' : 'bg-gray-200'} ${RESTRICCION_TEMPORAL_MATRICULA ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 ${formData.esRepetidor ? 'bg-gray-900' : 'bg-gray-200'}`}
                     >
                       <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform duration-200 ${formData.esRepetidor ? 'translate-x-8' : 'translate-x-1'}`} />
                     </button>
@@ -1819,7 +1775,7 @@ export default function App() {
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">
                     {isRepetidor ? 'Asignatura pendiente del curso repetido' : 'Asignatura pendiente 1'}
                   </label>
-                    <select name="asignaturaPendiente1" value={formData.asignaturaPendiente1} onChange={handleChange} disabled={RESTRICCION_TEMPORAL_MATRICULA} className={`w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none ${RESTRICCION_TEMPORAL_MATRICULA ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                    <select name="asignaturaPendiente1" value={formData.asignaturaPendiente1} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
                       <option value="">Ninguna...</option>
                       {(isRepetidor ? asignaturasParaRepetidor : asignaturasPrevias).map(a => (
                         <option key={a.id} value={a.id}>
@@ -1831,7 +1787,7 @@ export default function App() {
                   {(formData.tipoEnsenanza === 'profesional' && !isRepetidor) && (
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Asignatura pendiente 2</label>
-                      <select name="asignaturaPendiente2" value={formData.asignaturaPendiente2} onChange={handleChange} disabled={RESTRICCION_TEMPORAL_MATRICULA} className={`w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none ${RESTRICCION_TEMPORAL_MATRICULA ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                      <select name="asignaturaPendiente2" value={formData.asignaturaPendiente2} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
                         <option value="">Ninguna...</option>
                         {asignaturasPrevias.map(a => (
                           <option key={a.id} value={a.id}>
@@ -1844,7 +1800,7 @@ export default function App() {
                   {(isRepetidor && formData.tipoEnsenanza === 'profesional') && (
                     <div className="md:col-span-2 space-y-1">
                       <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">2ª Asignatura pendiente del curso repetido</label>
-                      <select name="asignaturaPendiente2" value={formData.asignaturaPendiente2} onChange={handleChange} disabled={RESTRICCION_TEMPORAL_MATRICULA} className={`w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none ${RESTRICCION_TEMPORAL_MATRICULA ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                      <select name="asignaturaPendiente2" value={formData.asignaturaPendiente2} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
                         <option value="">Ninguna...</option>
                         {asignaturasParaRepetidor.map(a => (
                           <option key={a.id} value={a.id}>
@@ -2180,14 +2136,14 @@ export default function App() {
                             <div className="relative group">
                               <button
                                 type="button"
-                                disabled={RESTRICCION_TEMPORAL_MATRICULA || (formData.tipoReduccion !== 'ninguna' && formData.tipoReduccion !== 'fam_num_general' && formData.tipoReduccion !== '')}
+                                disabled={formData.tipoReduccion !== 'ninguna' && formData.tipoReduccion !== 'fam_num_general' && formData.tipoReduccion !== ''}
                                 onClick={() => {
                                   setFormData(prev => ({ ...prev, matriculaHonor: !prev.matriculaHonor }));
                                   setIsExemptionModalOpen(false);
                                 }}
                                 className={`w-full p-4 rounded-2xl border-2 text-left transition-all flex flex-col gap-1 pr-16
                                   ${formData.matriculaHonor ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-50 bg-gray-50 hover:border-gray-200'}
-                                  ${RESTRICCION_TEMPORAL_MATRICULA || (formData.tipoReduccion !== 'ninguna' && formData.tipoReduccion !== 'fam_num_general' && formData.tipoReduccion !== '') ? 'opacity-40 cursor-not-allowed' : ''}
+                                  ${formData.tipoReduccion !== 'ninguna' && formData.tipoReduccion !== 'fam_num_general' && formData.tipoReduccion !== '' ? 'opacity-40 cursor-not-allowed' : ''}
                                 `}
                               >
                                 <span className="font-bold text-sm">Matrícula de Honor</span>
@@ -2570,13 +2526,12 @@ export default function App() {
 
             <div className="grid grid-cols-1 gap-6 mb-8">
               <div className="relative group">
-                <label className={`flex items-center gap-3 p-4 bg-gray-50 rounded-xl transition-all pr-16 ${RESTRICCION_TEMPORAL_MATRICULA ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-gray-100'}`}>
+                <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl transition-all pr-16 cursor-pointer hover:bg-gray-100">
                   <input 
                     type="checkbox" 
                     name="esPrimerAno" 
                     checked={formData.esPrimerAno}
                     onChange={handleChange}
-                    disabled={RESTRICCION_TEMPORAL_MATRICULA}
                     className="w-5 h-5 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
                   />
                   <div className="flex flex-col">

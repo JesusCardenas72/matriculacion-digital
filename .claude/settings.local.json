@@ -68,7 +68,11 @@
       "Bash(git revert *)",
       "Bash(echo \"=== exit: $? ===\")",
       "Bash(git checkout *)",
-      "Bash(npx vercel *)"
+      "Bash(npx vercel *)",
+      "Bash(npx electron-builder *)",
+      "Bash(python -c ' *)",
+      "Bash(node -e ' *)",
+      "Bash(echo \"exit $?\")"
     ]
   }
 }
