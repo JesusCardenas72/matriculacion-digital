@@ -104,6 +104,8 @@ See `.env.example` for the full list. Key ones:
 
 - Client-side using `@react-pdf/renderer` for the form page.
 - If user attaches files, `pdf-lib` merges the form PDF with attachments (images resized to A4, PDFs appended as pages).
+- Attached PDFs go through `src/pdf/adjuntos.ts` (`preparePdfAttachment`): unencrypted → copied as vector pages; encrypted/signed (e.g. Modelo 046, RC4 with owner restrictions only) → rasterized with pdf.js; real password → password modal; anything else → "No se puede procesar" modal that blocks submission.
+- **pdf.js must be imported only from `pdfjs-dist/legacy/build/…`** (via `loadPdfJs` in `src/pdf/adjuntos.ts`). The default v6 build calls very recent APIs without polyfills (`Uint8Array#toHex`, `Map#getOrInsertComputed`…) and breaks encrypted PDFs in non-updated browsers. Guarded by `src/__tests__/adjuntos-pdf.test.ts`.
 - Final PDF is Base64-encoded and sent to the upload endpoint.
 
 ## Power Platform / Dataverse Schema Notes

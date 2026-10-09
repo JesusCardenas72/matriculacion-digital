@@ -10,23 +10,7 @@ import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, File
 import { motion, AnimatePresence } from 'motion/react';
 const loadPdfModule = () => import('@react-pdf/renderer');
 const loadPdfLib = () => import('pdf-lib');
-const loadPdfJs = async () => {
-  const pdfjs = await import('pdfjs-dist');
-  if (!pdfjs.GlobalWorkerOptions.workerPort && !pdfjs.GlobalWorkerOptions.workerSrc) {
-    try {
-      // El worker se inlinea en el bundle (compatible con vite-plugin-singlefile)
-      const PdfWorker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?worker&inline')).default;
-      pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker();
-    } catch {
-      // Fallback: que pdfjs cree el worker por su cuenta a partir de un URL conocido
-      try {
-        const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
-        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-      } catch { /* sin worker: pdfjs intentará el modo fake worker */ }
-    }
-  }
-  return pdfjs;
-};
+import { preparePdfAttachment, rasterizePdfToPngs, errorMessage, toWinAnsi, type PreparedPdf } from './pdf/adjuntos';
 import { MatriculaPdf } from './MatriculaPdf';
 import { TutorialPdf } from './TutorialPdf';
 import logoCpm from './assets/logo_cpm.png';
@@ -93,6 +77,15 @@ export default function App() {
   // Mensaje de error/estado por archivo al intentar desbloquear
   const [pwErrors, setPwErrors] = useState<Record<string, string>>({});
   const [pwBusy, setPwBusy] = useState<string | null>(null);
+  // PDFs adjuntos que este navegador no ha podido convertir en páginas visibles.
+  // Bloquean el envío hasta que el usuario los quite (y suba una foto/captura).
+  const [unreadablePdfs, setUnreadablePdfs] = useState<{ name: string; detail: string }[]>([]);
+  const [showUnreadablePdfModal, setShowUnreadablePdfModal] = useState(false);
+  // PDFs que se están comprobando ahora mismo (al adjuntarlos)
+  const [checkingPdfNames, setCheckingPdfNames] = useState<string[]>([]);
+  // Resultado de preparar cada PDF (por objeto File + contraseña): la comprobación
+  // al adjuntar y la generación final comparten el mismo trabajo y el mismo resultado.
+  const preparedPdfsRef = useRef(new WeakMap<File, { password: string; promise: Promise<PreparedPdf> }>());
   const [viewMode, setViewMode] = useState<'form' | 'readonly'>('form');
   const [isConvalidacionModalOpen, setIsConvalidacionModalOpen] = useState(false);
   const [isConvalidacionSubjectModalOpen, setIsConvalidacionSubjectModalOpen] = useState(false);
@@ -630,41 +623,40 @@ export default function App() {
     </div>
   );
 
-  // ── helper: detecta si un PDF esta cifrado con contraseña real (no se puede
-  // renderizar sin la clave). PDF.js lanza PasswordException en ese caso. ──
-  const _isPasswordEncryptedPdf = async (file: File): Promise<boolean> => {
-    try {
-      const pdfjs = await loadPdfJs();
-      const buf = await file.arrayBuffer();
-      const task = pdfjs.getDocument({ data: new Uint8Array(buf), password: '' });
-      try {
-        const doc = await task.promise;
-        // pdfjs v6: el documento NO tiene destroy() (lanzaba TypeError). Liberamos con
-        // cleanup(), que además mantiene vivo el worker compartido (task.destroy() lo
-        // terminaría y rompería el rasterizado posterior de otros adjuntos).
-        doc.cleanup();
-        return false;
-      } catch (err: unknown) {
-        // pdfjs PasswordException tiene name === 'PasswordException'
-        if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'PasswordException') {
-          return true;
-        }
-        return false;
-      }
-    } catch {
-      return false;
-    }
+  const _isPdfFile = (f: File) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+
+  // ── helper: prepara (una sola vez por archivo y contraseña) un PDF adjunto ──
+  const _getPreparedPdf = (file: File, password = ''): Promise<PreparedPdf> => {
+    const cached = preparedPdfsRef.current.get(file);
+    if (cached && cached.password === password) return cached.promise;
+    const promise = file.arrayBuffer()
+      .then(buf => preparePdfAttachment(buf, password))
+      .catch((err: unknown): PreparedPdf => ({ kind: 'error', message: errorMessage(err) }));
+    preparedPdfsRef.current.set(file, { password, promise });
+    return promise;
   };
 
-  const _scanForEncryptedPdfs = async (files: File[]) => {
-    const found: string[] = [];
-    for (const f of files) {
-      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
-      if (!isPdf) continue;
-      if (await _isPasswordEncryptedPdf(f)) found.push(f.name);
+  const _markUnreadablePdf = (name: string, detail: string, openModal = true) => {
+    setUnreadablePdfs(prev => [...prev.filter(p => p.name !== name), { name, detail }]);
+    if (openModal) setShowUnreadablePdfModal(true);
+  };
+
+  // ── helper: comprueba al adjuntar que cada PDF se puede incluir en la solicitud,
+  // con la misma ruta que usará buildPdfBytes. Así el usuario se entera AHORA de
+  // que un PDF no se puede procesar, en vez de enviar una solicitud sin él. ──
+  const _checkPdfAttachments = async (files: File[]) => {
+    const pdfs = files.filter(_isPdfFile);
+    if (pdfs.length === 0) return;
+    setCheckingPdfNames(prev => [...prev, ...pdfs.map(f => f.name)]);
+    const needPassword: string[] = [];
+    for (const f of pdfs) {
+      const result = await _getPreparedPdf(f);
+      if (result.kind === 'password') needPassword.push(f.name);
+      if (result.kind === 'error') _markUnreadablePdf(f.name, result.message);
+      setCheckingPdfNames(prev => prev.filter(n => n !== f.name));
     }
-    if (found.length > 0) {
-      setEncryptedPdfNames(prev => Array.from(new Set([...prev, ...found])));
+    if (needPassword.length > 0) {
+      setEncryptedPdfNames(prev => Array.from(new Set([...prev, ...needPassword])));
     }
   };
 
@@ -679,17 +671,16 @@ export default function App() {
     }
     setPwBusy(name);
     try {
-      const pdfjs = await loadPdfJs();
-      const buf = await file.arrayBuffer();
-      const doc = await pdfjs.getDocument({ data: new Uint8Array(buf), password }).promise;
-      doc.cleanup(); // pdfjs v6: doc.destroy() no existe; cleanup() libera sin matar el worker
+      const result = await _getPreparedPdf(file, password);
+      if (result.kind === 'password') {
+        setPwErrors(prev => ({ ...prev, [name]: 'Contraseña incorrecta. Inténtalo de nuevo.' }));
+        return;
+      }
       setPdfPasswords(prev => ({ ...prev, [name]: password }));
       setEncryptedPdfNames(prev => prev.filter(n => n !== name));
       setPwErrors(prev => { const c = { ...prev }; delete c[name]; return c; });
       setPwInputs(prev => { const c = { ...prev }; delete c[name]; return c; });
-    } catch (err: unknown) {
-      const isPw = err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'PasswordException';
-      setPwErrors(prev => ({ ...prev, [name]: isPw ? 'Contraseña incorrecta. Inténtalo de nuevo.' : 'No se pudo abrir el documento.' }));
+      if (result.kind === 'error') _markUnreadablePdf(name, result.message);
     } finally {
       setPwBusy(null);
     }
@@ -715,8 +706,9 @@ export default function App() {
       return;
     }
     setAttachments(prev => [...prev, ...validFiles]);
-    // Detecta PDFs cifrados con contraseña real (no bloquea: solo informa)
-    void _scanForEncryptedPdfs(validFiles);
+    // Comprueba cada PDF: contraseña real → pide la clave (no bloquea);
+    // no procesable en este navegador → avisa y bloquea el envío hasta quitarlo.
+    void _checkPdfAttachments(validFiles);
     if (rejected.length > 0) {
       const names = rejected.map(f => `«${f.name}»`).join(', ');
       setValidationErrors([{
@@ -736,9 +728,19 @@ export default function App() {
         setPdfPasswords(p => { const c = { ...p }; delete c[removed.name]; return c; });
         setPwInputs(p => { const c = { ...p }; delete c[removed.name]; return c; });
         setPwErrors(p => { const c = { ...p }; delete c[removed.name]; return c; });
+        setUnreadablePdfs(p => p.filter(u => u.name !== removed.name));
       }
       return prev.filter((_, i) => i !== index);
     });
+  };
+
+  const _removeUnreadablePdfs = () => {
+    const names = unreadablePdfs.map(u => u.name);
+    setAttachments(prev => prev.filter(f => !names.includes(f.name)));
+    setEncryptedPdfNames(prev => prev.filter(n => !names.includes(n)));
+    setPdfPasswords(p => { const c = { ...p }; names.forEach(n => delete c[n]); return c; });
+    setUnreadablePdfs([]);
+    setShowUnreadablePdfModal(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -786,6 +788,11 @@ export default function App() {
       return;
     }
 
+    if (unreadablePdfs.length > 0) {
+      setShowUnreadablePdfModal(true);
+      return;
+    }
+
     // Validation passed: show reminder modal before preview
     setShowReminderModal(true);
   };
@@ -807,63 +814,6 @@ export default function App() {
       };
       img.onerror = reject; img.src = url;
     });
-
-  // ── helper: rasteriza un PDF (firmado/encriptado/no incrustable) a PNGs página a página ──
-  // pdf.js pinta el fondo a blanco (#ffffff) antes de dibujar el contenido de la
-  // página. Si tras renderizar no queda ningún píxel no-blanco, esa página se
-  // rasterizó vacía. Una página suelta en blanco es legítima (suele venir así en
-  // el origen) y se conserva; solo si TODAS salen vacías estamos ante el caso XFA
-  // (administración), cuyo contenido vive en una capa aparte y nunca se pinta.
-  const _isCanvasBlank = (ctx: CanvasRenderingContext2D, w: number, h: number): boolean => {
-    const { data } = ctx.getImageData(0, 0, w, h);
-    for (let i = 0; i < data.length; i += 16) { // muestreo 1 de cada 4 píxeles
-      if (data[i] < 250 || data[i + 1] < 250 || data[i + 2] < 250) return false;
-    }
-    return true;
-  };
-
-  const _rasterizePdfToPngs = async (buf: ArrayBuffer, password = ''): Promise<Uint8Array[]> => {
-    const pdfjs = await loadPdfJs();
-    const task = pdfjs.getDocument({
-      data: new Uint8Array(buf),
-      password,
-    });
-    const doc = await task.promise;
-    const out: Uint8Array[] = [];
-    let blankPages = 0;
-    try {
-      for (let i = 1; i <= doc.numPages; i++) {
-        const page = await doc.getPage(i);
-        const viewport = page.getViewport({ scale: 2 });
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.ceil(viewport.width);
-        canvas.height = Math.ceil(viewport.height);
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('Canvas 2D no disponible');
-        await page.render({ canvasContext: ctx, viewport, canvas: null }).promise;
-        if (_isCanvasBlank(ctx, canvas.width, canvas.height)) blankPages++;
-        const blob: Blob = await new Promise((res, rej) =>
-          canvas.toBlob(b => (b ? res(b) : rej(new Error('toBlob falló'))), 'image/png')
-        );
-        out.push(new Uint8Array(await blob.arrayBuffer()));
-        page.cleanup();
-      }
-    } finally {
-      // pdfjs v6: el documento NO tiene destroy() (lanzaba TypeError y tiraba TODO el
-      // rasterizado ya hecho al placeholder — la causa real del bug). Liberamos con
-      // cleanup(), que NO termina el worker compartido (task.destroy() sí lo haría y
-      // rompería el rasterizado de un segundo adjunto). En try para que liberar nunca
-      // aborte el resultado ya generado.
-      try { doc.cleanup(); } catch { /* noop */ }
-    }
-    if (out.length > 0 && blankPages === out.length) {
-      // Todas las páginas se rasterizaron vacías (p.ej. PDF XFA): abortamos para
-      // que el adjunto caiga al nivel 3 (archivo embebido) en vez de insertar
-      // páginas en blanco. Una o varias páginas vacías sueltas sí se conservan.
-      throw new Error('Rasterizado en blanco en todas las páginas (posible PDF XFA)');
-    }
-    return out;
-  };
 
   // ── helper: build the final merged PDF (page 1 = form, rest = attachments) ──
   const buildPdfBytes = async (ts: Date, reqNum: string | null): Promise<{ bytes: Uint8Array; filename: string }> => {
@@ -897,55 +847,65 @@ export default function App() {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
     for (const file of attachments) {
-      const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-      if (isPdf) {
+      // Nombre apto para drawText (WinAnsi): un carácter no codificable abortaría todo el PDF
+      const label = toWinAnsi(file.name);
+      if (_isPdfFile(file)) {
         const buf = await file.arrayBuffer();
-        let merged = false;
-        try {
-          const srcDoc = await PDFDocument.load(buf, { ignoreEncryption: true });
-          // `ignoreEncryption` solo evita el error de contraseña: NO descifra los
-          // streams. Si copiáramos sus páginas, pdf-lib trasladaría los bytes aún
-          // cifrados y se verían en blanco. Forzamos el rasterizado con pdf.js
-          // (intento 2), que sí descifra los PDFs con restricción de propietario.
-          if (srcDoc.isEncrypted) throw new Error('PDF cifrado: no apto para copyPages');
-          const copied = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
-          copied.forEach(pg => pdfDoc.addPage(pg));
-          merged = true;
-        } catch {
-          // PDF firmado/encriptado o no incrustable: lo adjuntamos en bruto al PDF resultante
-        }
-        if (!merged) {
-          // Intento 2: rasterizar con PDF.js (sirve para firmados y para
-          // "encriptados" sin contraseña real, p.ej. con restricciones de propietario)
+        const password = pdfPasswords[file.name] ?? '';
+        let prepared = await _getPreparedPdf(file, password);
+        if (prepared.kind === 'vector') {
           try {
-            const pngs = await _rasterizePdfToPngs(buf, pdfPasswords[file.name] ?? '');
-            for (const png of pngs) {
-              const embImg = await pdfDoc.embedPng(png);
-              const { width: iW, height: iH } = embImg;
-              const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
-              const pg = pdfDoc.addPage([A4W, A4H]);
-              pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
-              pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+            const srcDoc = await PDFDocument.load(buf);
+            const copied = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
+            copied.forEach(pg => pdfDoc.addPage(pg));
+            continue;
+          } catch {
+            // pdf-lib lo carga pero no sabe copiar sus páginas: lo rasterizamos
+            try {
+              prepared = { kind: 'raster', pngs: await rasterizePdfToPngs(buf, password) };
+            } catch (err) {
+              console.error('[adjuntos] No se pudo rasterizar el PDF:', err);
+              prepared = { kind: 'error', message: errorMessage(err) };
             }
-            merged = true;
-          } catch {
-            // PDF protegido con contraseña real u otro fallo: caemos al adjunto embebido
           }
         }
-        if (!merged) {
-          try {
-            await pdfDoc.attach(new Uint8Array(buf), file.name, {
-              mimeType: 'application/pdf',
-              description: 'Documento adjuntado por el solicitante (firmado/protegido)',
-            });
-          } catch {
-            // Si ni attach funciona, seguimos sin bloquear el envío
+        if (prepared.kind === 'raster') {
+          // PDF firmado/cifrado (p.ej. Modelo 046, cifrado solo con restricciones de propietario)
+          for (const png of prepared.pngs) {
+            const embImg = await pdfDoc.embedPng(png);
+            const { width: iW, height: iH } = embImg;
+            const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
+            const pg = pdfDoc.addPage([A4W, A4H]);
+            pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
+            pg.drawText(label, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
           }
-          const pg = pdfDoc.addPage([A4W, A4H]);
-          pg.drawText('Documento adjunto', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
-          pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
-          pg.drawText('Este PDF está protegido con contraseña y se incluye como archivo', { x: 40, y: A4H - 140, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
-          pg.drawText('adjunto embebido dentro de esta solicitud.', { x: 40, y: A4H - 154, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+          continue;
+        }
+        // 'password' (contraseña real no introducida) o 'error': el original va como
+        // archivo embebido y dejamos una página informativa que diga el motivo REAL.
+        try {
+          await pdfDoc.attach(new Uint8Array(buf), file.name, {
+            mimeType: 'application/pdf',
+            description: 'Documento adjuntado por el solicitante (no se pudo convertir en páginas)',
+          });
+        } catch {
+          // Si ni attach funciona, seguimos sin bloquear el envío
+        }
+        const pg = pdfDoc.addPage([A4W, A4H]);
+        const grey = rgb(0.4, 0.4, 0.4);
+        pg.drawText('Documento adjunto', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
+        pg.drawText(label, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
+        if (prepared.kind === 'password') {
+          pg.drawText('Este PDF está protegido con contraseña y se incluye como archivo', { x: 40, y: A4H - 140, size: 10, font, color: grey });
+          pg.drawText('adjunto embebido dentro de esta solicitud.', { x: 40, y: A4H - 154, size: 10, font, color: grey });
+        } else {
+          pg.drawText('No se ha podido convertir este PDF en páginas visibles. Se incluye como', { x: 40, y: A4H - 140, size: 10, font, color: grey });
+          pg.drawText('archivo adjunto embebido dentro de esta solicitud.', { x: 40, y: A4H - 154, size: 10, font, color: grey });
+          // Detalle técnico para que secretaría/soporte sepa qué falló (máx. 4 líneas)
+          const detail = toWinAnsi(`Detalle técnico: ${prepared.message}`);
+          for (let i = 0; i < 4 && i * 100 < detail.length; i++) {
+            pg.drawText(detail.slice(i * 100, (i + 1) * 100), { x: 40, y: A4H - 180 - i * 12, size: 8, font, color: grey });
+          }
         }
       } else if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|bmp|webp)$/i.test(file.name)) {
         try {
@@ -957,7 +917,7 @@ export default function App() {
           const fit = Math.min((A4W - 40) / iW, (A4H - 40) / iH);
           const pg = pdfDoc.addPage([A4W, A4H]);
           pg.drawImage(embImg, { x: (A4W - iW * fit) / 2, y: (A4H - iH * fit) / 2, width: iW * fit, height: iH * fit });
-          pg.drawText(file.name, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
+          pg.drawText(label, { x: 20, y: 14, size: 8, font, color: rgb(0.6, 0.6, 0.6) });
         } catch {
           try {
             await pdfDoc.attach(new Uint8Array(await file.arrayBuffer()), file.name, {
@@ -967,7 +927,7 @@ export default function App() {
           } catch { /* noop */ }
           const pg = pdfDoc.addPage([A4W, A4H]);
           pg.drawText('Imagen adjunta', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
-          pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
+          pg.drawText(label, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
         }
       } else {
         try {
@@ -978,7 +938,7 @@ export default function App() {
         } catch { /* noop */ }
         const pg = pdfDoc.addPage([A4W, A4H]);
         pg.drawText('Documento adjunto', { x: 40, y: A4H - 80, size: 16, font, color: rgb(0, 0, 0) });
-        pg.drawText(file.name, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
+        pg.drawText(label, { x: 40, y: A4H - 110, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
       }
     }
 
@@ -999,6 +959,15 @@ export default function App() {
       } catch (e) {
         if (e instanceof Error) throw e;
         throw new Error(`No se pudo leer el archivo «${file.name}».`);
+      }
+      // Mismo resultado (cacheado) que usará buildPdfBytes: si el PDF no se puede
+      // convertir en páginas, no se crea el registro y se pide otro formato.
+      if (_isPdfFile(file)) {
+        const prepared = await _getPreparedPdf(file, pdfPasswords[file.name] ?? '');
+        if (prepared.kind === 'error') {
+          _markUnreadablePdf(file.name, prepared.message, false);
+          throw new Error(`No se ha podido procesar el PDF «${file.name}». Quítalo y adjunta en su lugar una foto o captura de pantalla de cada página.`);
+        }
       }
     }
   };
@@ -1234,6 +1203,7 @@ export default function App() {
       if (!alreadySubmitted) {
         setAttachments([]);
         setEncryptedPdfNames([]);
+        setUnreadablePdfs([]);
       }
     } catch (error) {
       console.error(error);
@@ -1308,6 +1278,7 @@ export default function App() {
                   setRequestNumber(null);
                   setAttachments([]);
                   setEncryptedPdfNames([]);
+                  setUnreadablePdfs([]);
                   setValidationErrors([]);
                   setSinDniDni('');
                   setFormData({
@@ -1390,6 +1361,7 @@ export default function App() {
                   setRequestNumber(null);
                   setAttachments([]);
                   setEncryptedPdfNames([]);
+                  setUnreadablePdfs([]);
                   setValidationErrors([]);
                   setSinDniDni('');
                   setFormData({
@@ -2348,6 +2320,78 @@ export default function App() {
                 </AnimatePresence>
 
                 <AnimatePresence>
+                  {showUnreadablePdfModal && unreadablePdfs.length > 0 && (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setShowUnreadablePdfModal(false)}
+                        className="fixed inset-0 bg-black/40 backdrop-blur-md z-[126]"
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl z-[136] border border-red-100 max-h-[90vh] overflow-y-auto"
+                      >
+                        <div className="flex items-center gap-3 mb-5">
+                          <div className="p-2 bg-red-100 text-red-600 rounded-lg">
+                            <AlertCircle size={24} />
+                          </div>
+                          <h3 className="text-xl font-bold text-gray-900">No se puede procesar el documento</h3>
+                        </div>
+
+                        <div className="bg-red-50 border border-red-200 rounded-2xl p-5 mb-5 space-y-4">
+                          <p className="text-sm text-red-900 font-medium">
+                            Tu navegador no ha podido convertir este PDF en páginas para incluirlo en la solicitud:
+                          </p>
+                          <ul className="space-y-2">
+                            {unreadablePdfs.map(u => (
+                              <li key={u.name} className="text-sm text-red-900 flex items-start gap-2">
+                                <span className="mt-0.5 shrink-0">•</span>
+                                <span>
+                                  <span className="font-semibold break-all">{u.name}</span>
+                                  <span className="block text-[11px] text-red-700/70 break-all">{u.detail}</span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                          <div className="text-sm text-red-900">
+                            <p className="font-semibold mb-1">Para continuar:</p>
+                            <ol className="list-decimal pl-5 space-y-1">
+                              <li>Quita el documento de la lista de adjuntos.</li>
+                              <li>Adjunta en su lugar una <strong>foto o captura de pantalla</strong> de cada página (JPG o PNG).</li>
+                              <li>O bien prueba desde otro navegador actualizado (Chrome, Edge, Firefox o Safari).</li>
+                            </ol>
+                          </div>
+                          <p className="text-xs text-red-800">
+                            No podrás enviar la solicitud mientras este documento siga adjunto.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <button
+                            type="button"
+                            onClick={_removeUnreadablePdfs}
+                            className="flex-1 py-4 bg-red-600 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-red-700 transition-all"
+                          >
+                            Quitar documento
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowUnreadablePdfModal(false)}
+                            className="flex-1 py-4 bg-gray-900 text-white rounded-xl font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-lg shadow-gray-200"
+                          >
+                            Entendido
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+
+                <AnimatePresence>
                   {showReminderModal && (
                     <>
                       <motion.div
@@ -2958,6 +3002,13 @@ export default function App() {
                                 <p className="text-xs text-gray-500">
                                   {(file.size / 1024 / 1024).toFixed(2)} MB
                                 </p>
+                                {checkingPdfNames.includes(file.name) ? (
+                                  <p className="text-xs text-gray-400">Comprobando documento…</p>
+                                ) : unreadablePdfs.some(u => u.name === file.name) ? (
+                                  <p className="text-xs text-red-400">No se puede procesar: quítalo y adjunta una foto o captura</p>
+                                ) : encryptedPdfNames.includes(file.name) ? (
+                                  <p className="text-xs text-amber-400">Protegido con contraseña</p>
+                                ) : null}
                               </div>
                             </div>
                             <button
