@@ -28,6 +28,20 @@ de texto del formulario **debe preservar literalmente** lo que el usuario teclee
   a colarse un colapso global de espacios — NO lo arregles añadiendo campos a
   la lista, arregla el código que rompió la regla.
 
+## Opciones desactivables (modo administrador)
+
+Las restricciones temporales de *Datos de Matriculación* y *Forma de Pago* ya NO se
+hacen con constantes `RESTRICCION_*` en `App.tsx`. Se usa `src/opciones/`:
+
+- `catalogo.ts`: catálogo de opciones (`OPCIONES_CATALOGO`), URLs de los flows y
+  `ajustarFormulario` (deselecciona lo que se desactiva).
+- `Opcion.tsx`: `<Opcion k="...">` envuelve cada opción (atenuada + inerte + aviso).
+- `OpcionesProvider.tsx`: carga la configuración, palabra clave `cpmadmin` → contraseña →
+  barra de administrador → Guardar en Dataverse.
+- Desactivación **solo visual**, sin validación en servidor.
+- Backend: `docs/opciones-formulario-power-automate.md`.
+- Opción nueva: añadirla al catálogo y envolverla con `<Opcion>`. Por defecto queda visible.
+
 ## Daily Commands
 
 ```bash

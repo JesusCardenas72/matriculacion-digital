@@ -18,6 +18,9 @@ import logoJccm from './assets/logo_jccm.png';
 import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, validateDNI, validateEmail, validateCP, validateTelefono, sanitizeFieldValue, calcularCursoEscolar } from './constants';
 import { getCurrentCalendarYear } from './config/academicYear';
 import { useAcademicYear } from './hooks/useAcademicYear';
+import { useOpciones } from './opciones/OpcionesProvider';
+import { Opcion, InterruptoresAdmin, AVISO_NO_DISPONIBLE } from './opciones/Opcion';
+import { ajustarFormulario, cursoOpcionKey, PERFIL_OPCION, FORMA_PAGO_OPCION, REDUCCION_OPCION } from './opciones/catalogo';
 
 type FieldError = { key: string; message: string };
 
@@ -96,7 +99,14 @@ export default function App() {
   const [materiasIndex, setMateriasIndex] = useState<MateriasIndex | null>(null);
   const [materiasLoading, setMateriasLoading] = useState(true);
   const { year: academicYear } = useAcademicYear();
+  const { opciones, isOn } = useOpciones();
   const [sinDniDni, setSinDniDni] = useState('');
+
+  // Opciones desactivadas desde el modo administrador: si estaban
+  // seleccionadas, se deseleccionan (desactivación solo visual).
+  useEffect(() => {
+    setFormData(prev => ajustarFormulario(prev, opciones));
+  }, [opciones]);
 
   function generateRandomDni(): string {
     const LETTERS = 'TRWAGMYFPDXBNJZSQVHLCKE';
@@ -1639,6 +1649,7 @@ export default function App() {
                 </div>
                 <h2 className="text-base sm:text-xl font-semibold">Datos de Matriculación</h2>
               </div>
+              <Opcion k="convalidacion" avisoPos="debajo" className="flex flex-col items-end">
               <button
                 type="button"
                 onClick={() => { setConvalidacionModalView('types'); setIsConvalidacionModalOpen(true); }}
@@ -1647,10 +1658,12 @@ export default function App() {
                 {(formData.convalidacionAsignaturas ?? []).length > 0 && <CheckCircle2 size={16} />}
                 Convalidación
               </button>
+              </Opcion>
             </div>
 
             <div className="space-y-8">
               <div className="flex flex-wrap gap-6">
+                <Opcion k="ensenanzaElemental" avisoPos="debajo">
                 <label className="flex items-center gap-3 cursor-pointer group">
                   <input 
                     type="radio" 
@@ -1662,6 +1675,8 @@ export default function App() {
                   />
                   <span className="text-sm font-bold uppercase tracking-wider text-gray-600 group-hover:text-gray-900">Enseñanza Elemental</span>
                 </label>
+                </Opcion>
+                <Opcion k="ensenanzaProfesional" avisoPos="debajo">
                 <label className="flex items-center gap-3 cursor-pointer group">
                   <input 
                     type="radio" 
@@ -1673,6 +1688,7 @@ export default function App() {
                   />
                   <span className="text-sm font-bold uppercase tracking-wider text-gray-600 group-hover:text-gray-900">Enseñanza Profesional</span>
                 </label>
+                </Opcion>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
@@ -1680,8 +1696,16 @@ export default function App() {
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Curso</label>
                   <select required name="curso" value={formData.curso} onChange={handleChange} className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer">
                     <option value="" disabled>Seleccionar curso...</option>
-                    {cursos.map(c => <option key={c} value={c}>{c}</option>)}
+                    {cursos.map(c => {
+                      const key = cursoOpcionKey(formData.tipoEnsenanza, c);
+                      const disponible = !key || isOn(key);
+                      return <option key={c} value={c} disabled={!disponible}>{disponible ? c : `${c} — ${AVISO_NO_DISPONIBLE}`}</option>;
+                    })}
                   </select>
+                  <InterruptoresAdmin
+                    titulo="Cursos disponibles"
+                    keys={['cursoEE1', 'cursoEE2', 'cursoEE3', 'cursoEE4', 'cursoEP1', 'cursoEP2', 'cursoEP3', 'cursoEP4', 'cursoEP5', 'cursoEP6']}
+                  />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">Especialidad</label>
@@ -1704,6 +1728,7 @@ export default function App() {
                   </select>
                 </div>
                 <div className="md:col-span-2">
+                  <Opcion k="repetidor" avisoPos="debajo">
                   <div className="flex items-center gap-4">
                     <span className="text-sm font-bold uppercase tracking-wider text-gray-600">
                       Repetidor
@@ -1726,6 +1751,7 @@ export default function App() {
                       {formData.esRepetidor ? 'Sí' : 'No'}
                     </span>
                   </div>
+                  </Opcion>
                   {formData.esRepetidor && isRepetidorAllowed && (
                     <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 space-y-1">
                       {formData.tipoEnsenanza === 'elemental' ? (
@@ -1743,7 +1769,9 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="md:col-span-2 space-y-1">
+                <Opcion k="asignaturasPendientes" avisoPos="debajo" className="md:col-span-2">
+                <div className="space-y-3 sm:space-y-6">
+                <div className="space-y-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">
                     {isRepetidor ? 'Asignatura pendiente del curso repetido' : 'Asignatura pendiente 1'}
                   </label>
@@ -1782,6 +1810,8 @@ export default function App() {
                       </select>
                     </div>
                   )}
+                </div>
+                </Opcion>
 
                   {/* Asignaturas del curso actual */}
                   <AnimatePresence>
@@ -1877,9 +1907,9 @@ export default function App() {
                         { id: 'C', label: 'Perfil C', desc: formData.curso.includes('5') ? 'Improvisación / Coro 1' : 'Música moderna / Coro 2' },
                       ].map((perfil) => {
                         return (
+                          <Opcion key={perfil.id} k={PERFIL_OPCION[perfil.id]}>
                           <label
-                            key={perfil.id}
-                            className={`p-4 rounded-2xl border-2 transition-all flex flex-col gap-1 ${
+                            className={`h-full p-4 rounded-2xl border-2 transition-all flex flex-col gap-1 ${
                               formData.perfilProfesional === perfil.id
                                 ? 'border-gray-900 bg-gray-900 text-white cursor-pointer'
                                 : 'border-gray-100 bg-gray-50 hover:border-gray-200 cursor-pointer'
@@ -1896,6 +1926,7 @@ export default function App() {
                             <span className="font-bold text-sm">{perfil.label}</span>
                             <span className={`text-xs ${formData.perfilProfesional === perfil.id ? 'text-gray-300' : 'text-gray-500'}`}>{perfil.desc}</span>
                           </label>
+                          </Opcion>
                         );
                       })}
                     </div>
@@ -2068,7 +2099,9 @@ export default function App() {
                             { id: 'terrorismo', label: 'Víctima de Terrorismo', desc: 'Exención del 100% (Art. 16)', art: 'terrorismo' },
                             { id: 'violencia_genero', label: 'Víctima de Violencia de Género', desc: 'Exención del 100% (Art. 17)', art: 'violencia_genero' },
                             { id: 'ingreso_minimo', label: 'Ingreso Mínimo de Solidaridad', desc: 'Exención del 100% (Art. 18)', art: 'ingreso_minimo' },
-                          ].map((item) => (
+                          ].map((item) => {
+                            const opcionKey = REDUCCION_OPCION[item.id];
+                            const tarjeta = (
                             <div key={item.id} className="relative group">
                               <button
                                 type="button"
@@ -2100,11 +2133,14 @@ export default function App() {
                                 </button>
                               )}
                             </div>
-                          ))}
+                            );
+                            return opcionKey ? <Opcion key={item.id} k={opcionKey}>{tarjeta}</Opcion> : tarjeta;
+                          })}
 
                           {/* Separador para Matrícula de Honor */}
                           <div className="border-t border-gray-100 pt-3 mt-1">
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">Bonificación adicional apilable</p>
+                            <Opcion k="matriculaHonor">
                             <div className="relative group">
                               <button
                                 type="button"
@@ -2132,6 +2168,7 @@ export default function App() {
                                 <AlertCircle size={24} />
                               </button>
                             </div>
+                            </Opcion>
                           </div>
                         </div>
 
@@ -2569,6 +2606,7 @@ export default function App() {
             </div>
 
             <div className="grid grid-cols-1 gap-6 mb-8">
+              <Opcion k="primerAno">
               <div className="relative group">
                 <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl transition-all pr-16 cursor-pointer hover:bg-gray-100">
                   <input 
@@ -2592,6 +2630,7 @@ export default function App() {
                   <HelpCircle size={26} />
                 </button>
               </div>
+              </Opcion>
             </div>
 
             {formData.esRepetidor && formData.esPrimerAno && (
@@ -2609,12 +2648,14 @@ export default function App() {
                 { id: 'fraccionado', label: 'Opción 2', title: 'Pago Fraccionado', desc: 'Dos pagos (1er y 2º plazo)' },
                 { id: 'beca', label: 'Opción 3', title: 'Solicita Beca', desc: 'Debe aportar el justificante de registro de la beca para el centro' },
               ].filter(opcion => !(formData.tipoEnsenanza === 'elemental' && opcion.id === 'beca')).map((opcion) => (
-                <label key={opcion.id} className={`p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col gap-2 ${formData.formaPago === opcion.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
+                <Opcion key={opcion.id} k={FORMA_PAGO_OPCION[opcion.id]}>
+                <label className={`h-full p-6 rounded-2xl border-2 transition-all cursor-pointer flex flex-col gap-2 ${formData.formaPago === opcion.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-100 bg-gray-50 hover:border-gray-200'}`}>
                   <input type="radio" name="formaPago" value={opcion.id} checked={formData.formaPago === opcion.id} onChange={handleChange} className="sr-only" />
                   <span className={`text-[10px] font-bold uppercase tracking-widest ${formData.formaPago === opcion.id ? 'text-gray-400' : 'text-gray-400'}`}>{opcion.label}</span>
                   <span className="font-bold text-lg">{opcion.title}</span>
                   <span className={`text-xs leading-relaxed ${formData.formaPago === opcion.id ? 'text-gray-300' : 'text-gray-500'}`}>{opcion.desc}</span>
                 </label>
+                </Opcion>
               ))}
             </div>
 
