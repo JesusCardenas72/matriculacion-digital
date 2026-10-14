@@ -90,9 +90,11 @@ export const OPCIONES_POR_DEFECTO: OpcionesConfig = Object.fromEntries(
 
 /**
  * Convierte lo que venga de Dataverse (o de la caché local) en una
- * configuración completa. Solo un `false` explícito desactiva una opción:
- * claves ausentes, desconocidas o con otro tipo de valor se ignoran, de modo
- * que una opción nueva añadida al catálogo aparece activada por defecto.
+ * configuración completa. Acepta dos formatos:
+ *  - compacto `{ "off": ["beca", "cursoEP5"] }` (el que se guarda ahora);
+ *  - antiguo `{ "beca": false, ... }`, donde solo un `false` explícito desactiva.
+ * Claves ausentes o desconocidas se ignoran, de modo que una opción nueva
+ * añadida al catálogo aparece activada por defecto.
  */
 export function normalizarOpciones(raw: unknown): OpcionesConfig {
   let obj = raw;
@@ -101,11 +103,23 @@ export function normalizarOpciones(raw: unknown): OpcionesConfig {
   }
   const result = { ...OPCIONES_POR_DEFECTO };
   if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+    const rec = obj as Record<string, unknown>;
+    const off = Array.isArray(rec.off) ? rec.off : [];
     for (const o of OPCIONES_CATALOGO) {
-      if ((obj as Record<string, unknown>)[o.key] === false) result[o.key] = false;
+      if (rec[o.key] === false || off.includes(o.key)) result[o.key] = false;
     }
   }
   return result;
+}
+
+/**
+ * Formato que se guarda en Dataverse: solo la lista de opciones desactivadas.
+ * La columna `cr955_opciones` admite 850 caracteres y el objeto completo con
+ * todas las claves ya no cabe. Nunca es `{}` (el flujo lo interpretaría como
+ * "solo verificar contraseña" y no guardaría).
+ */
+export function serializarOpciones(config: OpcionesConfig): { off: OpcionKey[] } {
+  return { off: OPCIONES_CATALOGO.filter(o => config[o.key] === false).map(o => o.key) };
 }
 
 // ── Mapeos entre valores del formulario y claves del catálogo ───────────────
@@ -297,7 +311,7 @@ export async function enviarOpciones(password: string, config?: OpcionesConfig):
   const res = await fetch(PA_OPCIONES_GUARDAR_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config ? { password, opciones: config } : { password }),
+    body: JSON.stringify(config ? { password, opciones: serializarOpciones(config) } : { password }),
   });
   if (res.status === 401 || res.status === 403) throw new ClaveIncorrectaError();
   if (!res.ok) throw new Error(`Error al guardar (HTTP ${res.status}).`);

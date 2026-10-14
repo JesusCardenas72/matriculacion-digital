@@ -37,7 +37,7 @@ momento”*, y no se puede seleccionar. **No hay validación en el servidor**: e
 
 | Columna (nombre lógico) | Tipo | Uso |
 |---|---|---|
-| `cr955_opciones` (columna principal) | Texto (máx. **850**) | JSON con la configuración (ocupa unos 600 caracteres con las 29 opciones) |
+| `cr955_opciones` (columna principal) | Texto (máx. **850**) | JSON con la lista de opciones desactivadas (máx. ~680 caracteres aunque se desactiven las 46) |
 | `cr955_clave` | Texto (100) | Contraseña del modo administrador |
 
 Crear **una única fila**:
@@ -51,18 +51,26 @@ Para cambiar la contraseña, edita esa fila en Dataverse. El flow de lectura **n
 > Si al crear la tabla Dataverse genera otro nombre de conjunto, por ejemplo
 > `cr955_configuracionformularios`, usa el que aparezca en el selector de tabla de los flows.
 
-Formato del JSON. Solo cuenta `false`; las claves que falten se consideran visibles:
+Formato del JSON que se guarda: solo la lista de opciones **desactivadas** (las demás se
+consideran visibles). Todo visible = `{"off":[]}`:
 
 ```json
-{ "ensenanzaProfesional": false, "pagoFraccionado": false, "cursoEP5": false }
+{ "off": ["ensenanzaProfesional", "pagoFraccionado", "cursoEP5"] }
 ```
+
+> Antes se guardaba el objeto completo (`{ "beca": false, "pagoUnico": true, … }`). Al añadir las
+> especialidades dejó de caber en los 850 caracteres y el flujo devolvía **HTTP 502**. La lectura
+> sigue aceptando el formato antiguo.
 
 Claves disponibles (definidas en `OPCIONES_CATALOGO`, en `src/opciones/catalogo.ts`):
 `ensenanzaElemental`, `ensenanzaProfesional`, `cursoEE1`…`cursoEE4`, `cursoEP1`…`cursoEP6`,
 `repetidor`, `asignaturasPendientes`, `convalidacion`, `perfilA`, `perfilB`, `perfilC`,
 `primerAno`, `pagoUnico`, `pagoFraccionado`, `beca`, `reduccionFamNumGeneral`,
 `reduccionFamNumEspecial`, `reduccionDiscapacidad`, `reduccionTerrorismo`,
-`reduccionViolencia`, `reduccionIngresoMinimo`, `matriculaHonor`.
+`reduccionViolencia`, `reduccionIngresoMinimo`, `matriculaHonor`, y las especialidades
+`espCanto`, `espClarinete`, `espContrabajo`, `espFagot`, `espFlautaTravesera`, `espGuitarra`,
+`espOboe`, `espPercusion`, `espPiano`, `espSaxofon`, `espTrombon`, `espTrompa`, `espTrompeta`,
+`espTuba`, `espViola`, `espViolin`, `espVioloncello`.
 
 ---
 
@@ -103,7 +111,7 @@ administrador; `{ "password", "opciones" }` **guarda**.
        Opciones `string(triggerBody()?['opciones'])`; después **Response** `200`, `{"ok":true}`.
 
 Un `opciones` vacío (`{}`) se interpreta como "solo verificar" y **no** guarda. El formulario siempre
-envía las 29 claves, así que nunca ocurre.
+envía `{"off":[…]}`, que nunca está vacío, así que nunca ocurre.
 
 ---
 
@@ -112,5 +120,5 @@ envía las 29 claves, así que nunca ocurre.
 1. Pegar las dos URLs en `src/opciones/catalogo.ts` y desplegar.
 2. Teclear `cpmadmin` en el formulario y probar una contraseña incorrecta: debe salir *Contraseña incorrecta*.
 3. Entrar con la correcta, desactivar *Pago Fraccionado* y pulsar **Guardar**.
-4. Comprobar en Dataverse que `cr955_opciones` contiene `"pagoFraccionado":false`.
+4. Comprobar en Dataverse que `cr955_opciones` contiene `{"off":["pagoFraccionado"]}`.
 5. Abrir el formulario en otro navegador o en una ventana privada: *Pago Fraccionado* debe salir atenuado con el aviso.

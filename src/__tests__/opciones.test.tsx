@@ -11,6 +11,7 @@ import {
   especialidadOpcionKey,
   ESPECIALIDADES,
   normalizarOpciones,
+  serializarOpciones,
 } from '../opciones/catalogo';
 import { OpcionesProvider } from '../opciones/OpcionesProvider';
 import { Opcion, AVISO_NO_DISPONIBLE } from '../opciones/Opcion';
@@ -49,6 +50,18 @@ describe('normalizarOpciones', () => {
 
   it('acepta el JSON como texto (columna de Dataverse)', () => {
     expect(normalizarOpciones('{"pagoFraccionado":false}').pagoFraccionado).toBe(false);
+  });
+
+  it('formato compacto { off: [...] }: ida y vuelta', () => {
+    const c = { ...OPCIONES_POR_DEFECTO, beca: false, espPiano: false };
+    expect(serializarOpciones(c)).toEqual({ off: ['espPiano', 'beca'] });
+    expect(normalizarOpciones(JSON.stringify(serializarOpciones(c)))).toEqual(c);
+    expect(serializarOpciones(OPCIONES_POR_DEFECTO)).toEqual({ off: [] });
+  });
+
+  it('cabe en la columna de Dataverse (850) aunque se desactive todo', () => {
+    const todoOff = Object.fromEntries(OPCIONES_CATALOGO.map(o => [o.key, false])) as typeof OPCIONES_POR_DEFECTO;
+    expect(JSON.stringify(serializarOpciones(todoOff)).length).toBeLessThanOrEqual(850);
   });
 
   it('las claves del catálogo son únicas', () => {
@@ -181,7 +194,7 @@ describe('<Opcion> y modo administrador', () => {
     expect(await screen.findByText(/guardado, los alumnos ya ven/)).toBeInTheDocument();
     const guardado = fetchMock.mock.calls.map(c => JSON.parse(String(c[1]?.body))).find(b => b.opciones && b.password);
     expect(guardado.password).toBe('ok');
-    expect(guardado.opciones.beca).toBe(false);
+    expect(guardado.opciones).toEqual({ off: ['beca'] });
   });
 
   it('contraseña incorrecta (401): no entra en modo administrador', async () => {
