@@ -8,6 +8,8 @@ import {
   CLAVE_ADMIN,
   ajustarFormulario,
   cursoOpcionKey,
+  especialidadOpcionKey,
+  ESPECIALIDADES,
   normalizarOpciones,
 } from '../opciones/catalogo';
 import { OpcionesProvider } from '../opciones/OpcionesProvider';
@@ -64,6 +66,15 @@ describe('cursoOpcionKey', () => {
   });
 });
 
+describe('especialidadOpcionKey', () => {
+  it('todas las especialidades tienen clave en el catálogo', () => {
+    const keys = new Set<string>(OPCIONES_CATALOGO.map(o => o.key));
+    for (const esp of ESPECIALIDADES) expect(keys.has(especialidadOpcionKey(esp)!)).toBe(true);
+    expect(especialidadOpcionKey('Laúd')).toBeNull();
+    expect(especialidadOpcionKey('')).toBeNull();
+  });
+});
+
 describe('ajustarFormulario', () => {
   it('devuelve el mismo objeto si no hay nada desactivado seleccionado', () => {
     expect(ajustarFormulario(base, OPCIONES_POR_DEFECTO)).toBe(base);
@@ -83,6 +94,13 @@ describe('ajustarFormulario', () => {
     const r = ajustarFormulario(base, { ...OPCIONES_POR_DEFECTO, cursoEP5: false });
     expect(r.curso).toBe('');
     expect(r.perfilProfesional).toBe('');
+  });
+
+  it('especialidad desactivada: limpia especialidad y dependientes', () => {
+    const r = ajustarFormulario(base, { ...OPCIONES_POR_DEFECTO, espPiano: false });
+    expect(r.especialidad).toBe('');
+    expect(r.perfilProfesional).toBe('');
+    expect(r.curso).toBe('5º');
   });
 
   it('enseñanza desactivada: cambia a la otra y limpia beca/Canto', () => {
@@ -174,5 +192,23 @@ describe('<Opcion> y modo administrador', () => {
     await user.click(screen.getByRole('button', { name: 'Entrar' }));
     expect(await screen.findByText('Contraseña incorrecta.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Todas las opciones/ })).toBeNull();
+  });
+
+  it('panel de opciones: seleccionar y deseleccionar todo', async () => {
+    const user = userEvent.setup();
+    render(<OpcionesProvider><div /></OpcionesProvider>);
+    await user.keyboard(CLAVE_ADMIN);
+    await user.type(screen.getByPlaceholderText('Contraseña'), 'ok');
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
+    await user.click(await screen.findByRole('button', { name: /Todas las opciones/ }));
+
+    const [deseleccionarTodo] = screen.getAllByRole('button', { name: 'Deseleccionar todo' });
+    await user.click(deseleccionarTodo);
+    expect(screen.getAllByRole('checkbox').every(c => !(c as HTMLInputElement).checked)).toBe(true);
+    expect(screen.getByText(`${OPCIONES_CATALOGO.length} opciones desactivadas`, { exact: false })).toBeInTheDocument();
+
+    const [seleccionarTodo] = screen.getAllByRole('button', { name: 'Seleccionar todo' });
+    await user.click(seleccionarTodo);
+    expect(screen.getAllByRole('checkbox').every(c => (c as HTMLInputElement).checked)).toBe(true);
   });
 });

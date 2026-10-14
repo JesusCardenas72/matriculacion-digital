@@ -86,6 +86,11 @@ export function OpcionesProvider({ children }: { children: ReactNode }) {
     setEstado({ tipo: 'idle' });
   }, []);
 
+  const establecer = useCallback((keys: readonly OpcionKey[], valor: boolean) => {
+    setBorrador(prev => (prev ? { ...prev, ...Object.fromEntries(keys.map(k => [k, valor])) } : prev));
+    setEstado({ tipo: 'idle' });
+  }, []);
+
   const entrar = (clave: string) => {
     setPassword(clave);
     setBorrador({ ...publicada });
@@ -133,7 +138,7 @@ export function OpcionesProvider({ children }: { children: ReactNode }) {
               Modo administrador
             </div>
             <span className="text-xs font-medium">
-              {desactivadas === 0 ? 'Todas las opciones visibles' : `${desactivadas} opción${desactivadas === 1 ? '' : 'es'} desactivada${desactivadas === 1 ? '' : 's'}`}
+              {desactivadas === 0 ? 'Todas las opciones visibles' : (desactivadas === 1 ? '1 opción desactivada' : `${desactivadas} opciones desactivadas`)}
               {hayCambios && ' · cambios sin guardar'}
               {estado.tipo === 'ok' && ' · guardado, los alumnos ya ven esta configuración'}
             </span>
@@ -172,7 +177,7 @@ export function OpcionesProvider({ children }: { children: ReactNode }) {
       )}
 
       {admin && panelAbierto && borrador && (
-        <PanelOpciones borrador={borrador} onToggle={toggle} onCerrar={() => setPanelAbierto(false)} />
+        <PanelOpciones borrador={borrador} onToggle={toggle} onEstablecer={establecer} onCerrar={() => setPanelAbierto(false)} />
       )}
     </Ctx.Provider>
   );
@@ -234,18 +239,50 @@ function ModalClave({ onEntrar, onCancelar }: { onEntrar: (clave: string) => voi
   );
 }
 
-function PanelOpciones({ borrador, onToggle, onCerrar }: { borrador: OpcionesConfig; onToggle: (k: OpcionKey) => void; onCerrar: () => void }) {
+function BotonesTodas({ keys, borrador, onEstablecer, compacto = false }: {
+  keys: readonly OpcionKey[];
+  borrador: OpcionesConfig;
+  onEstablecer: (keys: readonly OpcionKey[], valor: boolean) => void;
+  compacto?: boolean;
+}) {
+  const todas = keys.every(k => borrador[k]);
+  const ninguna = keys.every(k => !borrador[k]);
+  const cls = compacto
+    ? 'text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-gray-500'
+    : 'px-2.5 py-1 rounded-lg border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed';
+  return (
+    <div className={`flex items-center ${compacto ? 'gap-3' : 'gap-2'}`}>
+      <button type="button" disabled={todas} onClick={() => onEstablecer(keys, true)} className={cls}>
+        Seleccionar todo
+      </button>
+      <button type="button" disabled={ninguna} onClick={() => onEstablecer(keys, false)} className={cls}>
+        Deseleccionar todo
+      </button>
+    </div>
+  );
+}
+
+function PanelOpciones({ borrador, onToggle, onEstablecer, onCerrar }: {
+  borrador: OpcionesConfig;
+  onToggle: (k: OpcionKey) => void;
+  onEstablecer: (keys: readonly OpcionKey[], valor: boolean) => void;
+  onCerrar: () => void;
+}) {
   const secciones = [
     { id: 'matriculacion', titulo: 'Datos de Matriculación' },
     { id: 'pago', titulo: 'Forma de Pago' },
   ] as const;
+  const todasLasClaves = OPCIONES_CATALOGO.map(o => o.key);
 
   return (
     <div className="fixed inset-0 z-[205] flex justify-end bg-black/30" onClick={onCerrar}>
       <aside className="h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-gray-900">Opciones disponibles</h3>
-          <button type="button" onClick={onCerrar} className="p-2 rounded-full hover:bg-gray-100"><X size={18} /></button>
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-6 py-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900">Opciones disponibles</h3>
+            <button type="button" onClick={onCerrar} className="p-2 rounded-full hover:bg-gray-100"><X size={18} /></button>
+          </div>
+          <BotonesTodas keys={todasLasClaves} borrador={borrador} onEstablecer={onEstablecer} />
         </div>
         <div className="p-6 space-y-8">
           {secciones.map(sec => {
@@ -256,7 +293,10 @@ function PanelOpciones({ borrador, onToggle, onCerrar }: { borrador: OpcionesCon
                 <h4 className="text-sm font-black uppercase tracking-wider text-gray-900">{sec.titulo}</h4>
                 {grupos.map(g => (
                   <div key={g} className="space-y-1">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{g}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{g}</p>
+                      <BotonesTodas compacto keys={items.filter(o => o.grupo === g).map(o => o.key)} borrador={borrador} onEstablecer={onEstablecer} />
+                    </div>
                     {items.filter(o => o.grupo === g).map(o => (
                       <label key={o.key} className="flex items-center gap-3 py-1.5 cursor-pointer">
                         <input

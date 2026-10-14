@@ -48,6 +48,23 @@ export const OPCIONES_CATALOGO = [
   { key: 'perfilA', label: 'Perfil A', seccion: 'matriculacion', grupo: 'Perfiles (5º y 6º Profesional)' },
   { key: 'perfilB', label: 'Perfil B', seccion: 'matriculacion', grupo: 'Perfiles (5º y 6º Profesional)' },
   { key: 'perfilC', label: 'Perfil C', seccion: 'matriculacion', grupo: 'Perfiles (5º y 6º Profesional)' },
+  { key: 'espCanto',           label: 'Canto',            seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espClarinete',       label: 'Clarinete',        seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espContrabajo',      label: 'Contrabajo',       seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espFagot',           label: 'Fagot',            seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espFlautaTravesera', label: 'Flauta Travesera', seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espGuitarra',        label: 'Guitarra',         seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espOboe',            label: 'Oboe',             seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espPercusion',       label: 'Percusión',        seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espPiano',           label: 'Piano',            seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espSaxofon',         label: 'Saxofón',          seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espTrombon',         label: 'Trombón',          seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espTrompa',          label: 'Trompa',           seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espTrompeta',        label: 'Trompeta',         seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espTuba',            label: 'Tuba',             seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espViola',           label: 'Viola',            seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espViolin',          label: 'Violín',           seccion: 'matriculacion', grupo: 'Especialidades' },
+  { key: 'espVioloncello',     label: 'Violoncello',      seccion: 'matriculacion', grupo: 'Especialidades' },
   // ── Forma de Pago ──
   { key: 'primerAno',       label: 'Primer año en el centro (apertura de expediente)', seccion: 'pago', grupo: 'Apertura de expediente' },
   { key: 'pagoUnico',       label: 'Pago Único',       seccion: 'pago', grupo: 'Forma de pago' },
@@ -111,6 +128,33 @@ export const PERFIL_OPCION: Record<string, OpcionKey> = {
   C: 'perfilC',
 };
 
+/** Especialidades en el orden en que aparecen en el selector, con su clave del catálogo. */
+export const ESPECIALIDAD_OPCION = {
+  'Canto': 'espCanto',
+  'Clarinete': 'espClarinete',
+  'Contrabajo': 'espContrabajo',
+  'Fagot': 'espFagot',
+  'Flauta Travesera': 'espFlautaTravesera',
+  'Guitarra': 'espGuitarra',
+  'Oboe': 'espOboe',
+  'Percusión': 'espPercusion',
+  'Piano': 'espPiano',
+  'Saxofón': 'espSaxofon',
+  'Trombón': 'espTrombon',
+  'Trompa': 'espTrompa',
+  'Trompeta': 'espTrompeta',
+  'Tuba': 'espTuba',
+  'Viola': 'espViola',
+  'Violín': 'espViolin',
+  'Violoncello': 'espVioloncello',
+} as const satisfies Record<string, OpcionKey>;
+
+export const ESPECIALIDADES = Object.keys(ESPECIALIDAD_OPCION) as (keyof typeof ESPECIALIDAD_OPCION)[];
+
+export function especialidadOpcionKey(especialidad: string): OpcionKey | null {
+  return (ESPECIALIDAD_OPCION as Record<string, OpcionKey>)[especialidad] ?? null;
+}
+
 export const FORMA_PAGO_OPCION: Record<string, OpcionKey> = {
   unico: 'pagoUnico',
   fraccionado: 'pagoFraccionado',
@@ -155,6 +199,9 @@ export function ajustarFormulario(data: EnrollmentFormData, on: OpcionesConfig):
 
   const cursoKey = cursoOpcionKey(d.tipoEnsenanza, d.curso);
   if (cursoKey && !on[cursoKey]) set({ curso: '', ...resetDependientesCurso });
+
+  const espKey = especialidadOpcionKey(d.especialidad);
+  if (espKey && !on[espKey]) set({ especialidad: '', ...resetDependientesCurso });
 
   if (d.esRepetidor && !on.repetidor) set({ esRepetidor: false, asignaturaPendiente1: '', asignaturaPendiente2: '' });
   if ((d.asignaturaPendiente1 || d.asignaturaPendiente2) && !on.asignaturasPendientes) {

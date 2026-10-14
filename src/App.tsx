@@ -20,7 +20,7 @@ import { getCurrentCalendarYear } from './config/academicYear';
 import { useAcademicYear } from './hooks/useAcademicYear';
 import { useOpciones } from './opciones/OpcionesProvider';
 import { Opcion, InterruptoresAdmin, AVISO_NO_DISPONIBLE } from './opciones/Opcion';
-import { ajustarFormulario, cursoOpcionKey, PERFIL_OPCION, FORMA_PAGO_OPCION, REDUCCION_OPCION } from './opciones/catalogo';
+import { ajustarFormulario, cursoOpcionKey, ESPECIALIDADES, ESPECIALIDAD_OPCION, PERFIL_OPCION, FORMA_PAGO_OPCION, REDUCCION_OPCION } from './opciones/catalogo';
 
 type FieldError = { key: string; message: string };
 
@@ -1717,15 +1717,15 @@ export default function App() {
                     className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-gray-200 transition-all appearance-none cursor-pointer"
                   >
                     <option value="" disabled>Seleccionar especialidad...</option>
-                    {[
-                      "Canto", "Clarinete", "Contrabajo", "Fagot", "Flauta Travesera", 
-                      "Guitarra", "Oboe", "Percusión", "Piano", "Saxofón", 
-                      "Trombón", "Trompa", "Trompeta", "Tuba", "Viola", 
-                      "Violín", "Violoncello"
-                    ].filter(esp => !(formData.tipoEnsenanza === 'elemental' && esp === 'Canto')).map((esp) => (
-                      <option key={esp} value={esp}>{esp}</option>
-                    ))}
+                    {ESPECIALIDADES.filter(esp => !(formData.tipoEnsenanza === 'elemental' && esp === 'Canto')).map((esp) => {
+                      const disponible = isOn(ESPECIALIDAD_OPCION[esp]);
+                      return <option key={esp} value={esp} disabled={!disponible}>{disponible ? esp : `${esp} — ${AVISO_NO_DISPONIBLE}`}</option>;
+                    })}
                   </select>
+                  <InterruptoresAdmin
+                    titulo="Especialidades disponibles"
+                    keys={ESPECIALIDADES.map(esp => ESPECIALIDAD_OPCION[esp])}
+                  />
                 </div>
                 <div className="md:col-span-2">
                   <Opcion k="repetidor" avisoPos="debajo">
@@ -3486,9 +3486,12 @@ export default function App() {
                         className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-gray-200 appearance-none cursor-pointer"
                       >
                         <option value="" disabled>Seleccionar...</option>
-                        {["Canto","Clarinete","Contrabajo","Fagot","Flauta Travesera","Guitarra","Oboe","Percusión","Piano","Saxofón","Trombón","Trompa","Trompeta","Tuba","Viola","Violín","Violoncello"]
+                        {ESPECIALIDADES
                           .filter(esp => !(formData.tipoEnsenanza === 'elemental' && esp === 'Canto'))
-                          .map(esp => <option key={esp} value={esp}>{esp}</option>)}
+                          .map(esp => {
+                            const disponible = isOn(ESPECIALIDAD_OPCION[esp]);
+                            return <option key={esp} value={esp} disabled={!disponible}>{disponible ? esp : `${esp} — ${AVISO_NO_DISPONIBLE}`}</option>;
+                          })}
                       </select>
                     </div>
                   </div>
