@@ -148,5 +148,5 @@ Choice values for `cr955_estadoasignatura`:
 - Do not assume `@/` aliases work in sub-packages; they are root-only.
 - Modifying `api/` does not affect `netlify/functions/` and vice-versa.
 - The `clean` script uses `rm -rf dist` and will fail on Windows unless using Git Bash/WSL.
-- Attachment upload limit is **9 MB total** (enforced in `App.tsx`).
+- Attachment upload limit is **5 MB total** (enforced in `App.tsx`).
 - `materias.json` must be present in `public/` for the app to load subject data; without it the form's subject selectors will be empty.

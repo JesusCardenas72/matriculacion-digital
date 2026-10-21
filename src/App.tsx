@@ -84,6 +84,8 @@ export default function App() {
   // Bloquean el envío hasta que el usuario los quite (y suba una foto/captura).
   const [unreadablePdfs, setUnreadablePdfs] = useState<{ name: string; detail: string }[]>([]);
   const [showUnreadablePdfModal, setShowUnreadablePdfModal] = useState(false);
+  // Aviso de "correo copiado" tras pulsar el email del centro en ese modal
+  const [centroEmailCopied, setCentroEmailCopied] = useState(false);
   // PDFs que se están comprobando ahora mismo (al adjuntarlos)
   const [checkingPdfNames, setCheckingPdfNames] = useState<string[]>([]);
   // Resultado de preparar cada PDF (por objeto File + contraseña): la comprobación
@@ -751,6 +753,29 @@ export default function App() {
     setPdfPasswords(p => { const c = { ...p }; names.forEach(n => delete c[n]); return c; });
     setUnreadablePdfs([]);
     setShowUnreadablePdfModal(false);
+  };
+
+  // Copia el email del centro al portapapeles (el mailto sigue abriendo el
+  // cliente de correo; si este falla, el usuario puede pegarlo a mano).
+  const _copyCentroEmail = () => {
+    const email = '13004341.cpm@educastillalamancha.es';
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = email;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* sin portapapeles */ }
+      document.body.removeChild(ta);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(email).catch(fallback);
+    } else {
+      fallback();
+    }
+    setCentroEmailCopied(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2400,6 +2425,22 @@ export default function App() {
                               <li>Quita el documento de la lista de adjuntos.</li>
                               <li>Adjunta en su lugar una <strong>foto o captura de pantalla</strong> de cada página (JPG o PNG).</li>
                               <li>O bien prueba desde otro navegador actualizado (Chrome, Edge, Firefox o Safari).</li>
+                              <li>
+                                O puede enviar el documento por correo electrónico a{' '}
+                                <a
+                                  href="mailto:13004341.cpm@educastillalamancha.es"
+                                  onClick={_copyCentroEmail}
+                                  className="font-semibold underline break-words hover:text-red-700"
+                                >
+                                  13004341.cpm@educastillalamancha.es
+                                </a>
+                                {centroEmailCopied && (
+                                  <span className="block mt-1 text-xs text-green-800 bg-green-50 border border-green-200 rounded-lg px-2 py-1">
+                                    ✓ Correo copiado al portapapeles. Si no se abre su aplicación de correo, péguelo
+                                    con Ctrl+V (o la opción «Pegar» del móvil) como destinatario y envíe el documento manualmente.
+                                  </span>
+                                )}
+                              </li>
                             </ol>
                           </div>
                           <p className="text-xs text-red-800">
