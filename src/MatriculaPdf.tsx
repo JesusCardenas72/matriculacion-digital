@@ -141,6 +141,11 @@ const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asigna
                 const cursoShort = yearMatch ? `${yearMatch[1].slice(-2)}/${yearMatch[2].slice(-2)}` : '';
                 return (
                   <View style={{ alignItems: 'flex-end' }}>
+                    {esAmpliacion && (
+                      <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: '#F97316', marginBottom: 1 }}>
+                        Ampliación
+                      </Text>
+                    )}
                     <Text style={{ fontSize: 22, fontFamily: 'Helvetica-Bold', color: '#F97316', lineHeight: 1 }}>
                       #{counter}
                     </Text>
