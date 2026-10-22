@@ -6,7 +6,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { EnrollmentFormData } from './types';
 import { loadMaterias, buildMateriasIndex, getMaterias, queryMateriasCurso, queryMateriasPrevias, MateriasIndex, Materia } from './data/materias';
-import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, FileText, Download, Paperclip, X, ExternalLink, HelpCircle } from 'lucide-react';
+import { Music, User, GraduationCap, CreditCard, CheckCircle2, AlertCircle, FileText, Download, Paperclip, X, ExternalLink, HelpCircle, ArrowUpCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 const loadPdfModule = () => import('@react-pdf/renderer');
 const loadPdfLib = () => import('pdf-lib');
@@ -101,7 +101,7 @@ export default function App() {
   const [materiasIndex, setMateriasIndex] = useState<MateriasIndex | null>(null);
   const [materiasLoading, setMateriasLoading] = useState(true);
   const { year: academicYear } = useAcademicYear();
-  const { opciones, isOn } = useOpciones();
+  const { opciones, isOn, ampliacion } = useOpciones();
   const [sinDniDni, setSinDniDni] = useState('');
 
   // Opciones desactivadas desde el modo administrador: si estaban
@@ -863,12 +863,13 @@ export default function App() {
         calculation={calculation}
         requestNumber={reqNum ?? undefined}
         allPendingFromLastCourse={allPendingFromLastCourse}
+        esAmpliacion={ampliacion}
       />
     ).toBlob();
 
     const ds = ts.toLocaleDateString('es-ES').replace(/\//g, '-');
     const hs = ts.toLocaleTimeString('es-ES').replace(/:/g, '-');
-    const filename = `SOLICITUD_${ds}_${hs}.pdf`;
+    const filename = `${ampliacion ? 'AMPLIACION' : 'SOLICITUD'}_${ds}_${hs}.pdf`;
 
     if (attachments.length === 0) {
       return { bytes: new Uint8Array(await mainBlob.arrayBuffer()), filename };
@@ -1135,6 +1136,7 @@ export default function App() {
           asignaturaPendiente1: formData.asignaturaPendiente1,
           asignaturaPendiente2: formData.asignaturaPendiente2 ?? '',
           esRepetidor: !!formData.esRepetidor,
+          ampliacion,
           perfilProfesional: formData.perfilProfesional,
           formaPago: formData.formaPago,
           familiaNumerosa: formData.familiaNumerosa,
@@ -1189,6 +1191,7 @@ export default function App() {
             rowId,
             nOrden,
             requestNumber: reqNum,
+            ampliacion,
             academicYear,
             fileName: filename,
             mimeType: 'application/pdf',
@@ -1476,7 +1479,7 @@ export default function App() {
 
           <div className="text-center flex-grow min-w-0 px-1">
             <h1 className="text-[clamp(0.75rem,3.5vw,1.5rem)] font-bold tracking-tight text-gray-900 mb-0.5 leading-tight">
-              Solicitud de Matrícula
+              {ampliacion ? 'Solicitud de Ampliación de Matrícula' : 'Solicitud de Matrícula'}
             </h1>
             <p className="text-[clamp(0.6rem,2.5vw,0.875rem)] text-gray-500 font-medium">
               Curso Académico {academicYear}
@@ -1498,6 +1501,18 @@ export default function App() {
             />
           </div>
         </header>
+
+        {ampliacion && (
+          <div role="note" className="-mt-2 mb-6 md:-mt-4 md:mb-10 flex items-start gap-3 bg-purple-50 border border-purple-200 text-purple-900 rounded-2xl p-4">
+            <ArrowUpCircle size={20} className="flex-shrink-0 mt-0.5 text-purple-700" />
+            <div className="text-sm">
+              <p className="font-bold">Ampliación de matrícula</p>
+              <p className="mt-0.5 text-purple-800">
+                Esta solicitud es una ampliación de matrícula: indica el <strong>curso superior</strong> al que pasas durante este curso académico.
+              </p>
+            </div>
+          </div>
+        )}
 
         <form noValidate onSubmit={handleSubmit} className={`space-y-4 sm:space-y-8 ${viewMode === 'readonly' ? 'pointer-events-none opacity-90' : ''}`}>
           {/* Datos Personales */}

@@ -1,5 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Lock, Save, ShieldCheck, SlidersHorizontal, Undo2, X } from 'lucide-react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { ArrowUpCircle, Lock, Save, ShieldCheck, SlidersHorizontal, Undo2, X } from 'lucide-react';
 import {
   OPCIONES_CATALOGO,
   PA_OPCIONES_GUARDAR_URL,
@@ -17,8 +17,10 @@ interface OpcionesCtx {
   /** Configuración efectiva: el borrador en modo administrador, la publicada si no. */
   opciones: OpcionesConfig;
   isOn: (key: OpcionKey) => boolean;
+  /** Modo ampliación de matrícula activo (ver `OpcionesConfig`). */
+  ampliacion: boolean;
   admin: boolean;
-  toggle: (key: OpcionKey) => void;
+  toggle: (key: keyof OpcionesConfig) => void;
 }
 
 const Ctx = createContext<OpcionesCtx | null>(null);
@@ -52,6 +54,23 @@ export function OpcionesProvider({ children }: { children: ReactNode }) {
   const admin = borrador !== null;
   const opciones = borrador ?? publicada;
 
+  // La barra es fija y su alto cambia con el ancho (los botones pasan a otra
+  // fila): el hueco que deja arriba se ajusta a su alto real. Se mide tras
+  // cada render (cambia el texto de la barra) y al cambiar el ancho.
+  const barra = useRef<HTMLDivElement>(null);
+  const [altoBarra, setAltoBarra] = useState(0);
+  useLayoutEffect(() => {
+    if (barra.current) setAltoBarra(barra.current.getBoundingClientRect().height);
+  });
+  useEffect(() => {
+    const el = barra.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const medir = () => setAltoBarra(el.getBoundingClientRect().height);
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [admin]);
+
   useEffect(() => {
     let cancelado = false;
     leerOpciones().then(c => { if (!cancelado) setPublicada(c); });
@@ -81,7 +100,7 @@ export function OpcionesProvider({ children }: { children: ReactNode }) {
 
   const isOn = useCallback((key: OpcionKey) => opciones[key] !== false, [opciones]);
 
-  const toggle = useCallback((key: OpcionKey) => {
+  const toggle = useCallback((key: keyof OpcionesConfig) => {
     setBorrador(prev => (prev ? { ...prev, [key]: !prev[key] } : prev));
     setEstado({ tipo: 'idle' });
   }, []);
@@ -118,20 +137,24 @@ export function OpcionesProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const hayCambios = borrador !== null && OPCIONES_CATALOGO.some(o => borrador[o.key] !== publicada[o.key]);
+  const hayCambios = borrador !== null && (
+    borrador.ampliacion !== publicada.ampliacion ||
+    OPCIONES_CATALOGO.some(o => borrador[o.key] !== publicada[o.key])
+  );
   const desactivadas = OPCIONES_CATALOGO.filter(o => !opciones[o.key]).length;
 
-  const value = useMemo(() => ({ opciones, isOn, admin, toggle }), [opciones, isOn, admin, toggle]);
+  const ampliacion = opciones.ampliacion;
+  const value = useMemo(() => ({ opciones, isOn, ampliacion, admin, toggle }), [opciones, isOn, ampliacion, admin, toggle]);
 
   return (
     <Ctx.Provider value={value}>
-      {admin && <div className="h-28 sm:h-16" aria-hidden="true" />}
+      {admin && <div className="h-28 sm:h-16" style={altoBarra ? { height: altoBarra } : undefined} aria-hidden="true" />}
       {children}
 
       {pidiendoClave && <ModalClave onEntrar={entrar} onCancelar={() => setPidiendoClave(false)} />}
 
       {admin && (
-        <div className="fixed top-0 inset-x-0 z-[200] bg-amber-400 text-gray-900 shadow-lg">
+        <div ref={barra} className="fixed top-0 inset-x-0 z-[200] bg-amber-400 text-gray-900 shadow-lg">
           <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">
             <div className="flex items-center gap-2 font-bold text-sm">
               <ShieldCheck size={18} />
@@ -145,7 +168,16 @@ export function OpcionesProvider({ children }: { children: ReactNode }) {
             {estado.tipo === 'error' && (
               <span className="text-xs font-bold text-red-800 bg-red-100 rounded-lg px-2 py-1">{estado.mensaje}</span>
             )}
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => toggle('ampliacion')}
+                aria-pressed={ampliacion}
+                title="Mientras esté activo, toda solicitud que se envíe será una ampliación de matrícula"
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 ${ampliacion ? 'bg-purple-700 text-white hover:bg-purple-800' : 'bg-white/70 hover:bg-white'}`}
+              >
+                <ArrowUpCircle size={14} /> Ampliación de matrícula: {ampliacion ? 'Sí' : 'No'}
+              </button>
               <button type="button" onClick={() => setPanelAbierto(true)} className="px-3 py-1.5 rounded-lg bg-white/70 hover:bg-white text-xs font-bold flex items-center gap-1.5">
                 <SlidersHorizontal size={14} /> Todas las opciones
               </button>
@@ -264,7 +296,7 @@ function BotonesTodas({ keys, borrador, onEstablecer, compacto = false }: {
 
 function PanelOpciones({ borrador, onToggle, onEstablecer, onCerrar }: {
   borrador: OpcionesConfig;
-  onToggle: (k: OpcionKey) => void;
+  onToggle: (k: keyof OpcionesConfig) => void;
   onEstablecer: (keys: readonly OpcionKey[], valor: boolean) => void;
   onCerrar: () => void;
 }) {
@@ -285,6 +317,23 @@ function PanelOpciones({ borrador, onToggle, onEstablecer, onCerrar }: {
           <BotonesTodas keys={todasLasClaves} borrador={borrador} onEstablecer={onEstablecer} />
         </div>
         <div className="p-6 space-y-8">
+          <section className="space-y-2">
+            <h4 className="text-sm font-black uppercase tracking-wider text-gray-900">Tipo de solicitud</h4>
+            <label className="flex items-start gap-3 py-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={borrador.ampliacion}
+                onChange={() => onToggle('ampliacion')}
+                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-purple-700 focus:ring-purple-700"
+              />
+              <span className="text-sm text-gray-800">
+                Ampliación de matrícula
+                <span className="block text-xs text-gray-500">
+                  Mientras esté marcada, toda solicitud enviada es una ampliación: alumno del centro que a mitad de curso pasa a un curso superior. El alumno ve el aviso, no la casilla.
+                </span>
+              </span>
+            </label>
+          </section>
           {secciones.map(sec => {
             const items = OPCIONES_CATALOGO.filter(o => o.seccion === sec.id);
             const grupos = [...new Set(items.map(o => o.grupo))];

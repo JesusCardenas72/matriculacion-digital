@@ -64,6 +64,24 @@ describe('normalizarOpciones', () => {
     expect(JSON.stringify(serializarOpciones(todoOff)).length).toBeLessThanOrEqual(850);
   });
 
+  it('modo ampliación: desactivado por defecto, solo se activa con true explícito', () => {
+    expect(OPCIONES_POR_DEFECTO.ampliacion).toBe(false);
+    expect(normalizarOpciones('{"off":[],"ampliacion":"true"}').ampliacion).toBe(false);
+    expect(normalizarOpciones('{"off":["beca"],"ampliacion":true}')).toEqual({ ...OPCIONES_POR_DEFECTO, beca: false, ampliacion: true });
+  });
+
+  it('modo ampliación: ida y vuelta y solo se escribe si está activo', () => {
+    const c = { ...OPCIONES_POR_DEFECTO, ampliacion: true };
+    expect(serializarOpciones(c)).toEqual({ off: [], ampliacion: true });
+    expect(normalizarOpciones(JSON.stringify(serializarOpciones(c)))).toEqual(c);
+    expect('ampliacion' in serializarOpciones(OPCIONES_POR_DEFECTO)).toBe(false);
+  });
+
+  it('cabe en la columna aunque se desactive todo y se active la ampliación', () => {
+    const todoOff = { ...Object.fromEntries(OPCIONES_CATALOGO.map(o => [o.key, false])), ampliacion: true } as typeof OPCIONES_POR_DEFECTO;
+    expect(JSON.stringify(serializarOpciones(todoOff)).length).toBeLessThanOrEqual(850);
+  });
+
   it('las claves del catálogo son únicas', () => {
     const keys = OPCIONES_CATALOGO.map(o => o.key);
     expect(new Set(keys).size).toBe(keys.length);
@@ -222,6 +240,27 @@ describe('<Opcion> y modo administrador', () => {
 
     const [seleccionarTodo] = screen.getAllByRole('button', { name: 'Seleccionar todo' });
     await user.click(seleccionarTodo);
-    expect(screen.getAllByRole('checkbox').every(c => (c as HTMLInputElement).checked)).toBe(true);
+    // «Seleccionar todo» no toca el modo ampliación, que no es una opción del catálogo.
+    const casillaAmpliacion = screen.getByRole('checkbox', { name: /Ampliación de matrícula/ });
+    expect(casillaAmpliacion).not.toBeChecked();
+    expect(screen.getAllByRole('checkbox').filter(c => c !== casillaAmpliacion).every(c => (c as HTMLInputElement).checked)).toBe(true);
+  });
+
+  it('modo ampliación: oculto al alumno, se activa y se guarda desde el modo administrador', async () => {
+    const user = userEvent.setup();
+    render(<OpcionesProvider><div /></OpcionesProvider>);
+    expect(screen.queryByRole('button', { name: /Ampliación de matrícula/ })).toBeNull();
+
+    await user.keyboard(CLAVE_ADMIN);
+    await user.type(screen.getByPlaceholderText('Contraseña'), 'ok');
+    await user.click(screen.getByRole('button', { name: 'Entrar' }));
+    await user.click(await screen.findByRole('button', { name: 'Ampliación de matrícula: No' }));
+    expect(screen.getByRole('button', { name: 'Ampliación de matrícula: Sí' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/cambios sin guardar/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Guardar/ }));
+    expect(await screen.findByText(/guardado, los alumnos ya ven/)).toBeInTheDocument();
+    const guardado = fetchMock.mock.calls.map(c => JSON.parse(String(c[1]?.body))).find(b => b.opciones && b.password);
+    expect(guardado.opciones).toEqual({ off: [], ampliacion: true });
   });
 });

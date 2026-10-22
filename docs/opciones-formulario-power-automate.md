@@ -58,6 +58,16 @@ consideran visibles). Todo visible = `{"off":[]}`:
 { "off": ["ensenanzaProfesional", "pagoFraccionado", "cursoEP5"] }
 ```
 
+Con el **modo ampliación de matrícula** activo (interruptor «Ampliación de matrícula» de la barra
+de administrador) se añade `"ampliacion": true`; si está en No, la clave no se escribe. Los flows
+de opciones no cambian, porque guardan y devuelven el objeto tal cual. Mientras está activo, toda
+solicitud es una ampliación y los flows de **crear registro** y de **PDF** reciben `ampliacion: true`.
+El de crear debe pasarlo a la columna Sí/No `cr955_ampliacion` de `cpmmr_matriculas`.
+
+```json
+{ "off": [], "ampliacion": true }
+```
+
 > Antes se guardaba el objeto completo (`{ "beca": false, "pagoUnico": true, … }`). Al añadir las
 > especialidades dejó de caber en los 850 caracteres y el flujo devolvía **HTTP 502**. La lectura
 > sigue aceptando el formato antiguo.

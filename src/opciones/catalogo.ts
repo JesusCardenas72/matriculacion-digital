@@ -81,12 +81,21 @@ export const OPCIONES_CATALOGO = [
 
 export type OpcionKey = (typeof OPCIONES_CATALOGO)[number]['key'];
 
-/** `true` = visible y seleccionable; `false` = atenuada y bloqueada. */
-export type OpcionesConfig = Record<OpcionKey, boolean>;
+/**
+ * Por cada opción del catálogo: `true` = visible y seleccionable; `false` =
+ * atenuada y bloqueada.
+ *
+ * `ampliacion` no es una opción del catálogo sino un modo del formulario:
+ * mientras está activo, toda solicitud enviada es una AMPLIACIÓN DE
+ * MATRÍCULA (alumno del centro que a mitad de curso pasa a un curso
+ * superior). El alumno no ve el interruptor, solo el aviso. Por defecto, no.
+ */
+export type OpcionesConfig = Record<OpcionKey, boolean> & { ampliacion: boolean };
 
-export const OPCIONES_POR_DEFECTO: OpcionesConfig = Object.fromEntries(
-  OPCIONES_CATALOGO.map(o => [o.key, true]),
-) as OpcionesConfig;
+export const OPCIONES_POR_DEFECTO: OpcionesConfig = {
+  ...(Object.fromEntries(OPCIONES_CATALOGO.map(o => [o.key, true])) as Record<OpcionKey, boolean>),
+  ampliacion: false,
+};
 
 /**
  * Convierte lo que venga de Dataverse (o de la caché local) en una
@@ -94,7 +103,8 @@ export const OPCIONES_POR_DEFECTO: OpcionesConfig = Object.fromEntries(
  *  - compacto `{ "off": ["beca", "cursoEP5"] }` (el que se guarda ahora);
  *  - antiguo `{ "beca": false, ... }`, donde solo un `false` explícito desactiva.
  * Claves ausentes o desconocidas se ignoran, de modo que una opción nueva
- * añadida al catálogo aparece activada por defecto.
+ * añadida al catálogo aparece activada por defecto. El modo ampliación solo
+ * se activa con `"ampliacion": true` explícito.
  */
 export function normalizarOpciones(raw: unknown): OpcionesConfig {
   let obj = raw;
@@ -108,6 +118,7 @@ export function normalizarOpciones(raw: unknown): OpcionesConfig {
     for (const o of OPCIONES_CATALOGO) {
       if (rec[o.key] === false || off.includes(o.key)) result[o.key] = false;
     }
+    result.ampliacion = rec.ampliacion === true;
   }
   return result;
 }
@@ -116,10 +127,12 @@ export function normalizarOpciones(raw: unknown): OpcionesConfig {
  * Formato que se guarda en Dataverse: solo la lista de opciones desactivadas.
  * La columna `cr955_opciones` admite 850 caracteres y el objeto completo con
  * todas las claves ya no cabe. Nunca es `{}` (el flujo lo interpretaría como
- * "solo verificar contraseña" y no guardaría).
+ * "solo verificar contraseña" y no guardaría). `ampliacion` solo se escribe
+ * cuando está activo.
  */
-export function serializarOpciones(config: OpcionesConfig): { off: OpcionKey[] } {
-  return { off: OPCIONES_CATALOGO.filter(o => config[o.key] === false).map(o => o.key) };
+export function serializarOpciones(config: OpcionesConfig): { off: OpcionKey[]; ampliacion?: true } {
+  const off = OPCIONES_CATALOGO.filter(o => config[o.key] === false).map(o => o.key);
+  return config.ampliacion ? { off, ampliacion: true } : { off };
 }
 
 // ── Mapeos entre valores del formulario y claves del catálogo ───────────────

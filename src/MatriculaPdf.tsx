@@ -31,6 +31,8 @@ export interface MatriculaPdfProps {
   calculation: CalcResult;
   requestNumber?: string;
   allPendingFromLastCourse?: boolean;
+  /** Ampliación de matrícula: cambia el título y añade una etiqueta en la cabecera. */
+  esAmpliacion?: boolean;
 }
 
 const C = {
@@ -97,7 +99,7 @@ const DesgloseRow = ({ label, value, highlight, discount }: { label: string; val
   </View>
 );
 
-const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asignaturasCursoActual, selectedPendingSubjects, calculation, requestNumber, allPendingFromLastCourse }: MatriculaPdfProps) => {
+const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asignaturasCursoActual, selectedPendingSubjects, calculation, requestNumber, allPendingFromLastCourse, esAmpliacion }: MatriculaPdfProps) => {
   const fechaFmt = formData.fechaNacimiento ? new Date(formData.fechaNacimiento + 'T12:00:00').toLocaleDateString('es-ES') : '';
 
   const perfilLabel =
@@ -118,7 +120,14 @@ const MatriculaPdfComponent = ({ formData, academicYear, submitTimestamp, asigna
         <View style={{ ...s.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: 10 }}>
           <Image src={logoJccm} style={{ height: 30 }} />
           <View style={{ alignItems: 'center' }}>
-            <Text style={{ fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.gray900 }}>Solicitud de Matricula</Text>
+            <Text style={{ fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.gray900 }}>
+              {esAmpliacion ? 'Solicitud de Ampliacion de Matricula' : 'Solicitud de Matricula'}
+            </Text>
+            {esAmpliacion && (
+              <View style={{ backgroundColor: '#7E22CE', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, marginTop: 2, marginBottom: 1 }}>
+                <Text style={{ fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.white, letterSpacing: 0.6 }}>AMPLIACION DE MATRICULA</Text>
+              </View>
+            )}
             <Text style={{ fontSize: 9, color: C.gray500, marginTop: 1 }}>Curso Academico {academicYear}</Text>
             <Text style={{ fontSize: 8, color: C.gray400 }}>C.P.M. "Marcos Redondo", Ciudad Real</Text>
           </View>
