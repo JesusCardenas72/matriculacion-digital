@@ -19,6 +19,16 @@ import { FEES, ARTICLE_TEXTS, PROFILE_SPECIFIC_SUBJECTS, REDUCCION_LABEL, valida
 import { getCurrentCalendarYear } from './config/academicYear';
 import { useAcademicYear } from './hooks/useAcademicYear';
 import { useOpciones } from './opciones/OpcionesProvider';
+import DesbloqueoAmpliacion from './ampliacion/DesbloqueoAmpliacion';
+import ConfirmarCambio from './ampliacion/ConfirmarCambio';
+import {
+  datosAFormulario,
+  destinoFormulario,
+  leerTokenDeUrl,
+  opcionesNecesarias,
+  pideConfirmacion,
+  type DatosEnlaceAmpliacion,
+} from './ampliacion/enlace';
 import { Opcion, InterruptoresAdmin, AVISO_NO_DISPONIBLE } from './opciones/Opcion';
 import { ajustarFormulario, cursoOpcionKey, ESPECIALIDADES, ESPECIALIDAD_OPCION, PERFIL_OPCION, FORMA_PAGO_OPCION, REDUCCION_OPCION } from './opciones/catalogo';
 
@@ -101,8 +111,55 @@ export default function App() {
   const [materiasIndex, setMateriasIndex] = useState<MateriasIndex | null>(null);
   const [materiasLoading, setMateriasLoading] = useState(true);
   const { year: academicYear } = useAcademicYear();
-  const { opciones, isOn, ampliacion } = useOpciones();
+  const { opciones, isOn, ampliacion, enlaceAmpliacion, activarEnlaceAmpliacion } = useOpciones();
   const [sinDniDni, setSinDniDni] = useState('');
+
+  // ── Enlace personal de ampliación (#ampliacion=… del correo del Centro) ──
+  // Se pide el DNI para descifrar los datos de la matrícula original; después,
+  // cambiar uno de esos datos pide confirmación (una vez por campo).
+  const [tokenAmpliacion, setTokenAmpliacion] = useState(() => leerTokenDeUrl(window.location.hash));
+  const [originalesAmpliacion, setOriginalesAmpliacion] = useState<Partial<Record<string, unknown>> | null>(null);
+  const [camposConfirmados, setCamposConfirmados] = useState<Set<string>>(() => new Set());
+  const [cambioPendiente, setCambioPendiente] = useState<{ campo: string; valor: unknown; aplicar: () => void } | null>(null);
+
+  const abrirEnlaceAmpliacion = (datosEnlace: DatosEnlaceAmpliacion) => {
+    const datos = datosAFormulario(datosEnlace);
+    activarEnlaceAmpliacion(datosEnlace, opcionesNecesarias(datos));
+    setFormData(prev => ({ ...prev, ...datos }));
+    setOriginalesAmpliacion(datos);
+    setCamposConfirmados(new Set());
+    setFieldErrors({});
+    setTokenAmpliacion(null);
+  };
+
+  /** Aplica el cambio, o primero pide confirmación si el dato vino del enlace. */
+  const confirmarOAplicar = (campo: string, valor: unknown, aplicar: () => void) => {
+    if (pideConfirmacion(campo, valor, originalesAmpliacion, camposConfirmados)) {
+      setCambioPendiente({ campo, valor, aplicar });
+      return;
+    }
+    aplicar();
+  };
+
+  const confirmarCambioPendiente = () => {
+    if (!cambioPendiente) return;
+    const { campo, aplicar } = cambioPendiente;
+    setCamposConfirmados(prev => new Set(prev).add(campo));
+    setCambioPendiente(null);
+    aplicar();
+    // Vuelve el foco al campo, con el cursor al final, para seguir escribiendo.
+    setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[name="${campo}"]`);
+      el?.focus();
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        try {
+          el.setSelectionRange(el.value.length, el.value.length);
+        } catch {
+          // Fechas, casillas y similares no tienen cursor de texto.
+        }
+      }
+    }, 0);
+  };
 
   // Opciones desactivadas desde el modo administrador: si estaban
   // seleccionadas, se deseleccionan (desactivación solo visual).
@@ -475,6 +532,11 @@ export default function App() {
       val = sanitizeFieldValue(name, val);
     }
 
+    const valor = val;
+    confirmarOAplicar(name, valor, () => aplicarCambio(name, valor));
+  };
+
+  const aplicarCambio = (name: string, val: string | boolean) => {
     if (name === 'formaPago' && (val === 'unico' || val === 'fraccionado')) {
       if (formData.curso.includes('1º') && !formData.esPrimerAno) {
         setIsAperturaWarningOpen(true);
@@ -1426,6 +1488,22 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] text-gray-900 font-sans py-4 sm:py-8 px-2 sm:px-4">
+      {tokenAmpliacion && (
+        <DesbloqueoAmpliacion
+          token={tokenAmpliacion}
+          onAbierto={abrirEnlaceAmpliacion}
+          onOmitir={() => setTokenAmpliacion(null)}
+        />
+      )}
+      {cambioPendiente && (
+        <ConfirmarCambio
+          campo={cambioPendiente.campo}
+          valorOriginal={originalesAmpliacion?.[cambioPendiente.campo]}
+          valorNuevo={cambioPendiente.valor}
+          onConfirmar={confirmarCambioPendiente}
+          onCancelar={() => setCambioPendiente(null)}
+        />
+      )}
       <div className="max-w-4xl mx-auto">
         {viewMode === 'readonly' && (
           <div className="mb-6 flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
@@ -1507,9 +1585,18 @@ export default function App() {
             <ArrowUpCircle size={20} className="flex-shrink-0 mt-0.5 text-purple-700" />
             <div className="text-sm">
               <p className="font-bold">Ampliación de matrícula</p>
-              <p className="mt-0.5 text-purple-800">
-                Esta solicitud es una ampliación de matrícula: indica el <strong>curso superior</strong> al que pasas durante este curso académico.
-              </p>
+              {enlaceAmpliacion ? (
+                <p className="mt-0.5 text-purple-800">
+                  Ampliación autorizada a <strong>{destinoFormulario(enlaceAmpliacion.destino).curso} de Enseñanza {destinoFormulario(enlaceAmpliacion.destino).tipoEnsenanza === 'profesional' ? 'Profesional' : 'Elemental'}</strong>
+                  {enlaceAmpliacion.especialidad ? <> · {enlaceAmpliacion.especialidad}</> : null}.
+                  Los datos vienen de su matrícula actual{enlaceAmpliacion.origen?.nOrden != null ? ` (Nº ${enlaceAmpliacion.origen.nOrden})` : ''}: revíselos y complete lo que falte.
+                  Si cambia alguno, se le pedirá confirmación.
+                </p>
+              ) : (
+                <p className="mt-0.5 text-purple-800">
+                  Esta solicitud es una ampliación de matrícula: indica el <strong>curso superior</strong> al que pasas durante este curso académico.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -1547,7 +1634,7 @@ export default function App() {
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 ml-1">D.N.I. / N.I.E.</label>
                 <div className="flex gap-2">
                   <input required name="dni" value={sinDniDni ? 'Sin DNI' : formData.dni} onChange={handleChange} onBlur={handleDniBlur} disabled={!!sinDniDni} className={`flex-1 w-full px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base bg-gray-50 border-none rounded-xl focus:ring-2 transition-all ${fieldErrors.dni ? 'ring-2 ring-red-300' : 'focus:ring-gray-200'} ${sinDniDni ? 'text-gray-400 italic cursor-not-allowed' : ''}`} maxLength={9} placeholder="12345678X o X1234567B" />
-                  <button type="button" onClick={handleSinDniToggle} className={`px-3 py-2 sm:px-4 sm:py-3 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${sinDniDni ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                  <button type="button" onClick={() => confirmarOAplicar('dni', sinDniDni ? '' : '(sin DNI)', handleSinDniToggle)} className={`px-3 py-2 sm:px-4 sm:py-3 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${sinDniDni ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
                     {sinDniDni ? 'Tiene DNI' : 'Sin DNI'}
                   </button>
                 </div>
@@ -2145,7 +2232,7 @@ export default function App() {
                             <div key={item.id} className="relative group">
                               <button
                                 type="button"
-                                onClick={() => {
+                                onClick={() => confirmarOAplicar('tipoReduccion', item.id, () => {
                                   // Si la nueva reducción es incompatible con Matrícula de Honor, la limpiamos
                                   const compatibleConHonor = item.id === 'ninguna' || item.id === 'fam_num_general';
                                   setFormData(prev => ({
@@ -2154,7 +2241,7 @@ export default function App() {
                                     matriculaHonor: compatibleConHonor ? prev.matriculaHonor : false,
                                   }));
                                   setIsExemptionModalOpen(false);
-                                }}
+                                })}
                                 className={`w-full p-4 rounded-2xl border-2 text-left transition-all flex flex-col gap-1 pr-16 ${formData.tipoReduccion === item.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-50 bg-gray-50 hover:border-gray-200'}`}
                               >
                                 <span className="font-bold text-sm">{item.label}</span>

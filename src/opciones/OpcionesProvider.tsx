@@ -12,15 +12,23 @@ import {
   type OpcionKey,
   type OpcionesConfig,
 } from './catalogo';
+import type { DatosEnlaceAmpliacion } from '../ampliacion/enlace';
 
 interface OpcionesCtx {
   /** Configuración efectiva: el borrador en modo administrador, la publicada si no. */
   opciones: OpcionesConfig;
   isOn: (key: OpcionKey) => boolean;
-  /** Modo ampliación de matrícula activo (ver `OpcionesConfig`). */
+  /** Modo ampliación de matrícula activo (ver `OpcionesConfig`) o abierto con un enlace personal. */
   ampliacion: boolean;
   admin: boolean;
   toggle: (key: keyof OpcionesConfig) => void;
+  /** Datos del enlace personal de ampliación ya descifrado (null si no se entró por uno). */
+  enlaceAmpliacion: DatosEnlaceAmpliacion | null;
+  /**
+   * Activa el modo ampliación solo para esta visita y permite las opciones que
+   * la familia necesita aunque el modo administrador las tenga desactivadas.
+   */
+  activarEnlaceAmpliacion: (datos: DatosEnlaceAmpliacion, opcionesNecesarias: OpcionKey[]) => void;
 }
 
 const Ctx = createContext<OpcionesCtx | null>(null);
@@ -51,8 +59,18 @@ export function OpcionesProvider({ children }: { children: ReactNode }) {
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [estado, setEstado] = useState<EstadoGuardado>({ tipo: 'idle' });
 
+  const [enlace, setEnlace] = useState<{ datos: DatosEnlaceAmpliacion; forzadas: OpcionKey[] } | null>(null);
+
   const admin = borrador !== null;
-  const opciones = borrador ?? publicada;
+  const opciones = useMemo<OpcionesConfig>(() => {
+    const base = borrador ?? publicada;
+    if (!enlace || enlace.forzadas.length === 0) return base;
+    return { ...base, ...Object.fromEntries(enlace.forzadas.map(k => [k, true])) };
+  }, [borrador, publicada, enlace]);
+
+  const activarEnlaceAmpliacion = useCallback((datos: DatosEnlaceAmpliacion, forzadas: OpcionKey[]) => {
+    setEnlace({ datos, forzadas });
+  }, []);
 
   // La barra es fija y su alto cambia con el ancho (los botones pasan a otra
   // fila): el hueco que deja arriba se ajusta a su alto real. Se mide tras
@@ -143,8 +161,12 @@ export function OpcionesProvider({ children }: { children: ReactNode }) {
   );
   const desactivadas = OPCIONES_CATALOGO.filter(o => !opciones[o.key]).length;
 
-  const ampliacion = opciones.ampliacion;
-  const value = useMemo(() => ({ opciones, isOn, ampliacion, admin, toggle }), [opciones, isOn, ampliacion, admin, toggle]);
+  const ampliacion = opciones.ampliacion || enlace !== null;
+  const enlaceAmpliacion = enlace?.datos ?? null;
+  const value = useMemo(
+    () => ({ opciones, isOn, ampliacion, admin, toggle, enlaceAmpliacion, activarEnlaceAmpliacion }),
+    [opciones, isOn, ampliacion, admin, toggle, enlaceAmpliacion, activarEnlaceAmpliacion],
+  );
 
   return (
     <Ctx.Provider value={value}>

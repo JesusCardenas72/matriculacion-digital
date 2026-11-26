@@ -63,6 +63,18 @@ hacen con constantes `RESTRICCION_*` en `App.tsx`. Se usa `src/opciones/`:
   toda solicitud es una ampliación: cambian el título y el aviso del formulario, el PDF
   (`MatriculaPdf` con `esAmpliacion`) y el archivo, que pasa a llamarse `AMPLIACION_…`, y se envía
   `ampliacion` a los flows de crear y de PDF (el de crear debe mapearlo a `cr955_ampliacion`).
+- **Enlace personal de ampliación** (`src/ampliacion/`): GestionMatriculasAdmin envía
+  `…/#ampliacion=<token>` con los datos de la matrícula original **cifrados** (AES-GCM, llave
+  PBKDF2 del DNI del alumno o, si no tiene, de una clave de acceso «ABCD-EFGH» que va en el correo;
+  token `1d…` o `1c…`). Al abrirlo,
+  `DesbloqueoAmpliacion` pide el DNI, `descifrarEnlace` lo abre y el formulario queda en modo
+  ampliación **solo para esa visita** (`activarEnlaceAmpliacion` en `OpcionesProvider`, que además
+  permite el curso/especialidad/pago/reducción de esa familia aunque estén desactivados) y relleno
+  con `datosAFormulario`. Cambiar un dato precargado pide confirmación una vez por campo
+  (`ConfirmarCambio`, `pideConfirmacion`; en `handleChange`, «Sin DNI» y las reducciones). Los
+  tutores no se rellenan (no están en Dataverse). El formato del token es el de
+  `GestionMatriculasAdmin/src/utils/enlaceFormularioAmpliacion.ts`: si cambia, actualizar en los dos
+  sitios el vector común de `src/__tests__/ampliacion-enlace.test.ts`.
 
 ## Daily Commands
 
